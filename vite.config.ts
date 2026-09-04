@@ -16,6 +16,16 @@ export default defineConfig({
           chunk.name === "background" ? "background.js" : "assets/[name]-[hash].js",
         chunkFileNames: "assets/[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]",
+        manualChunks: (id) => {
+          if (id.includes("node_modules/@codemirror") || id.includes("node_modules/@uiw")) {
+            return "editor";
+          }
+          if (id.includes("node_modules/react") || id.includes("node_modules/scheduler")) {
+            return "react";
+          }
+          if (id.includes("node_modules")) return "vendor";
+          return undefined;
+        },
       },
     },
   },
