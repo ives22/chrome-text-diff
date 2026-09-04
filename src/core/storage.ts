@@ -8,6 +8,7 @@ import {
 
 export const STORAGE_KEY = "textdiff:state";
 export const PENDING_COMPARE_KEY = "textdiff:pending-compare";
+export const PENDING_ORIGINAL_KEY = "textdiff:pending-original";
 export const MAX_HISTORY_ENTRIES = 20;
 export const MAX_STORAGE_BYTES = 8 * 1024 * 1024;
 

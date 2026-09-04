@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Menu,
   Moon,
@@ -30,6 +30,8 @@ import {
   type StorageAdapter,
 } from "./core/storage";
 import type { CompareOptions, DiffResult, ThemeMode } from "./core/types";
+import type { ExtensionMessage } from "./extension/messages";
+import { consumePendingCompare } from "./extension/pendingCompare";
 
 interface DiffClient {
   compare(leftText: string, rightText: string, options: CompareOptions): Promise<DiffResult>;
@@ -61,6 +63,7 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
   const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < 960);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const initialPendingHandled = useRef(false);
 
   useEffect(() => {
     if (initialState) return;
@@ -121,7 +124,7 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
     }));
   };
 
-  const runComparison = async (draft = state.draft) => {
+  const runComparison = useCallback(async (draft = state.draft) => {
     const validationError = getValidationError(draft.leftText, draft.rightText);
     if (validationError) {
       setError(validationError);
@@ -143,7 +146,38 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
     } finally {
       setIsComparing(false);
     }
-  };
+  }, [client, state.draft]);
+
+  const applyPendingCompare = useCallback(async () => {
+    const pending = await consumePendingCompare();
+    if (!pending) return;
+    const draft = {
+      ...state.draft,
+      leftText: pending.leftText,
+      rightText: pending.rightText,
+      leftName: pending.leftName,
+      rightName: pending.rightName,
+      updatedAt: new Date().toISOString(),
+    };
+    setState((current) => ({ ...current, draft }));
+    setScreen("input");
+    if (pending.autoCompare) await runComparison(draft);
+  }, [runComparison, state.draft]);
+
+  useEffect(() => {
+    if (!hydrated || initialPendingHandled.current) return;
+    initialPendingHandled.current = true;
+    void applyPendingCompare();
+  }, [applyPendingCompare, hydrated]);
+
+  useEffect(() => {
+    if (typeof chrome === "undefined" || !chrome.runtime?.onMessage) return;
+    const listener = (message: ExtensionMessage) => {
+      if (message.type === "PENDING_COMPARE_READY") void applyPendingCompare();
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, [applyPendingCompare]);
 
   const handleOptionsChange = (options: CompareOptions) => {
     const previous = state.draft.options;

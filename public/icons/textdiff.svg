@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <clipPath id="mark-shape">
+      <rect x="8" y="8" width="112" height="112" rx="24" />
+    </clipPath>
+  </defs>
+  <g clip-path="url(#mark-shape)">
+    <rect x="8" y="8" width="112" height="112" fill="#f5f7f6" />
+    <rect x="64" y="8" width="56" height="112" fill="#147d69" />
+  </g>
+  <rect x="11" y="11" width="106" height="106" rx="21" fill="none" stroke="#147d69" stroke-width="6" />
+  <text x="38" y="83" fill="#0c6252" font-family="Helvetica Neue, Arial, sans-serif" font-size="53" font-weight="700" text-anchor="middle">T</text>
+  <text x="91" y="83" fill="#ffffff" font-family="Helvetica Neue, Arial, sans-serif" font-size="53" font-weight="700" text-anchor="middle">D</text>
+</svg>
