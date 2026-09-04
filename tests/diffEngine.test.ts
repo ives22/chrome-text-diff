@@ -79,6 +79,26 @@ describe("computeDiff", () => {
     expect(result.rows[0]?.left?.segments).toContainEqual({ type: "remove", value: "😀" });
     expect(result.rows[0]?.right?.segments).toContainEqual({ type: "add", value: "✅" });
   });
+
+  it("compares twenty thousand configuration lines within the performance budget", () => {
+    const leftLines = Array.from(
+      { length: MAX_TEXT_LINES },
+      (_, index) => `service-${index}: image=registry.example.com/app:${index} replicas=2`,
+    );
+    const rightLines = leftLines.map((line, index) =>
+      index % 1_000 === 0 ? line.replace("replicas=2", "replicas=3") : line,
+    );
+    const startedAt = performance.now();
+
+    const result = computeDiff(
+      leftLines.join("\n"),
+      rightLines.join("\n"),
+      DEFAULT_COMPARE_OPTIONS,
+    );
+
+    expect(performance.now() - startedAt).toBeLessThan(3_000);
+    expect(result.stats).toMatchObject({ added: 20, removed: 20, hunks: 20 });
+  }, 8_000);
 });
 
 describe("validateText", () => {

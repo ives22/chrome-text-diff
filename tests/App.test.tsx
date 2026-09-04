@@ -70,4 +70,22 @@ describe("App", () => {
     await user.click(screen.getByRole("tab", { name: "历史" }));
     expect(screen.getByRole("button", { name: /打开 原始文本 ↔ 更改后文本/ })).toBeInTheDocument();
   });
+
+  it("announces the mobile sidebar action according to its open state", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 768 });
+
+    render(
+      <App
+        initialState={createDefaultAppState()}
+        storage={new MemoryStorage()}
+      />,
+    );
+
+    const openButton = screen.getByRole("button", { name: "打开侧栏" });
+    await user.click(openButton);
+    expect(screen.getByRole("button", { name: "关闭侧栏" })).toBeInTheDocument();
+
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+  });
 });

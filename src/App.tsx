@@ -324,6 +324,9 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
   };
 
   const sidebarHidden = !isNarrow && state.settings.sidebarCollapsed;
+  const sidebarToggleLabel = isNarrow
+    ? mobileSidebarOpen ? "关闭侧栏" : "打开侧栏"
+    : sidebarHidden ? "展开侧栏" : "收起侧栏";
   const themeIcon = state.settings.theme === "dark"
     ? <Moon size={17} />
     : state.settings.theme === "light"
@@ -335,7 +338,7 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
       <header className="app-header">
         <div className="brand-cluster">
           <IconButton
-            label={sidebarHidden ? "展开侧栏" : "收起侧栏"}
+            label={sidebarToggleLabel}
             className="sidebar-toggle"
             onClick={toggleSidebar}
           >
@@ -372,7 +375,7 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
         <button
           type="button"
           className="sidebar-scrim"
-          aria-label="关闭侧栏"
+          aria-label="点击背景关闭侧栏"
           onClick={() => setMobileSidebarOpen(false)}
         />
       )}

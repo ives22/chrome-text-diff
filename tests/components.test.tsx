@@ -126,6 +126,31 @@ describe("DiffViewer", () => {
     expect(screen.getByLabelText("删除第 2 行")).toBeInTheDocument();
     expect(screen.getByLabelText("新增第 2 行")).toBeInTheDocument();
   });
+
+  it("does not show a change marker in an empty split placeholder", () => {
+    const additionOnly: DiffResult = {
+      stats: { added: 1, removed: 0, unchanged: 0, hunks: 1 },
+      hunks: [{ id: "hunk-1", rowStart: 0, rowEnd: 0, rightStart: 1 }],
+      rows: [{
+        id: "row-1",
+        hunkId: "hunk-1",
+        kind: "add",
+        right: { lineNumber: 1, text: "new line" },
+      }],
+    };
+
+    render(
+      <DiffViewer
+        result={additionOnly}
+        viewMode="split"
+        wrapLines
+        activeHunkIndex={0}
+      />,
+    );
+
+    expect(screen.getByLabelText("左侧空白占位")).toHaveTextContent("");
+    expect(screen.getByLabelText("右侧新增第 1 行")).toHaveTextContent("+new line");
+  });
 });
 
 describe("HistoryPanel", () => {

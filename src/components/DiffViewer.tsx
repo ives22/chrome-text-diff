@@ -147,10 +147,18 @@ function DiffCellView({
 }) {
   const effectiveKind =
     kind === "change" ? (side === "left" ? "remove" : "add") : kind;
-  const marker = effectiveKind === "add" ? "+" : effectiveKind === "remove" ? "−" : "";
+  const marker = !cell ? "" : effectiveKind === "add" ? "+" : effectiveKind === "remove" ? "−" : "";
+  const sideLabel = side === "left" ? "左侧" : "右侧";
+  const ariaLabel = !cell
+    ? `${sideLabel}空白占位`
+    : effectiveKind === "add"
+      ? `${sideLabel}新增第 ${cell.lineNumber} 行`
+      : effectiveKind === "remove"
+        ? `${sideLabel}删除第 ${cell.lineNumber} 行`
+        : `${sideLabel}未更改第 ${cell.lineNumber} 行`;
 
   return (
-    <div className={`diff-cell row-${cell ? effectiveKind : "empty"}`}>
+    <div className={`diff-cell row-${cell ? effectiveKind : "empty"}`} aria-label={ariaLabel}>
       <span className="line-number">{cell?.lineNumber ?? ""}</span>
       <span className="change-marker" aria-hidden="true">{marker}</span>
       <code>{cell ? <Segments cell={cell} /> : null}</code>
