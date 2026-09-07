@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   AI_ANALYSIS_CHUNK_BYTES,
   AI_ANALYSIS_MAX_BYTES,
+  AI_ANALYSIS_REQUEST_TIMEOUT_MS,
   analyzeFullComparison,
+  analyzeHunk,
   createFullTextAnalysisPlan,
   parseAiAnalysis,
 } from "../src/ai/analysis";
@@ -18,6 +20,39 @@ const profile: ModelProfile = {
 };
 
 describe("full text AI analysis planning", () => {
+  it("gives formal hunk analysis five minutes while preserving caller cancellation", async () => {
+    const calls: unknown[][] = [];
+    const signal = new AbortController().signal;
+    const client = {
+      async complete(...args: unknown[]) {
+        calls.push(args);
+        return JSON.stringify({ summary: "单块分析", risks: [], suggestions: [] });
+      },
+    };
+
+    await analyzeHunk(client, profile, "sk-test", {
+      hunkId: "hunk-1",
+      leftText: "before",
+      rightText: "after",
+      leftName: "before.txt",
+      rightName: "after.txt",
+      options: {
+        viewMode: "split",
+        granularity: "smart",
+        ignoreCase: false,
+        ignoreWhitespace: false,
+        ignoreBlankLines: false,
+        wrapLines: true,
+      },
+    }, signal);
+
+    expect(calls[0]?.[3]).toMatchObject({
+      signal,
+      timeoutMs: AI_ANALYSIS_REQUEST_TIMEOUT_MS,
+    });
+    expect(AI_ANALYSIS_REQUEST_TIMEOUT_MS).toBe(5 * 60_000);
+  });
+
   it("uses one request for input within forty-eight KiB", () => {
     const plan = createFullTextAnalysisPlan("left", "right");
     expect(plan.chunks).toEqual([{ index: 1, total: 1, leftText: "left", rightText: "right" }]);
@@ -81,6 +116,9 @@ describe("full text AI analysis planning", () => {
     });
 
     expect(calls).toHaveLength(plan.requestCount);
+    for (const call of calls) {
+      expect(call[3]).toMatchObject({ timeoutMs: AI_ANALYSIS_REQUEST_TIMEOUT_MS });
+    }
     expect(result.summary).toBe("最终汇总");
     expect(result.suggestions).toHaveLength(1);
     expect(JSON.stringify(calls.at(-1))).not.toContain(leftText);

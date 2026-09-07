@@ -80,6 +80,8 @@ npm run build
 - 根域名兼容地址会优先发现 `/v1/models`，成功后自动校正 API 地址，避免把管理页面误当作模型响应
 - 保存前连接测试；测试只发送“只回复 OK”，不包含差异文本
 
+模型列表通过 `GET /v1/models` 获取；连接测试、差异块分析、全文分析和分块汇总均使用 `POST /v1/chat/completions`。模型列表及连接测试超时为 20 秒，正式分析每次请求最多等待 5 分钟，并始终可以从结果抽屉中手动取消。
+
 API 密钥默认只保留在当前浏览器会话。勾选“在本机记住密钥”后，密钥会保存在 Chrome 扩展隔离的本地存储中，但不会被额外加密。HTTP 地址允许使用，但界面会要求确认明文传输风险。
 
 ## AI 差异分析
@@ -120,7 +122,7 @@ npm test
 npm run build
 ```
 
-`npm run package` 会执行生产构建，并按当前版本生成 ZIP，例如 `artifacts/textdiff-v0.3.1.zip`。GitHub Actions 在每次提交和拉取请求上运行完整门禁，并上传同样的构建产物。
+`npm run package` 会执行生产构建，并按当前版本生成 ZIP，例如 `artifacts/textdiff-v0.3.2.zip`。GitHub Actions 在每次提交和拉取请求上运行完整门禁，并上传同样的构建产物。
 
 ## 技术结构
 

@@ -6,6 +6,7 @@ export const AI_ANALYSIS_CHUNK_BYTES = 48 * 1024;
 export const AI_ANALYSIS_MAX_CHUNKS = 8;
 export const AI_ANALYSIS_MAX_BYTES = AI_ANALYSIS_CHUNK_BYTES * AI_ANALYSIS_MAX_CHUNKS;
 export const AI_REPLACEMENT_MAX_BYTES = 64 * 1024;
+export const AI_ANALYSIS_REQUEST_TIMEOUT_MS = 5 * 60_000;
 
 export interface FullTextChunk {
   index: number;
@@ -108,7 +109,7 @@ export async function analyzeHunk(
         rightText: input.rightText,
       },
     }),
-    { maxTokens: 1_500, signal },
+    { maxTokens: 1_500, signal, timeoutMs: AI_ANALYSIS_REQUEST_TIMEOUT_MS },
   );
   return parseAiAnalysis(response, new Set([input.hunkId]));
 }
@@ -133,7 +134,7 @@ export async function analyzeFullComparison(
         rightText: input.rightText,
         hunks: input.hunks,
       }),
-      { maxTokens: 3_000, signal },
+      { maxTokens: 3_000, signal, timeoutMs: AI_ANALYSIS_REQUEST_TIMEOUT_MS },
     );
     return parseAiAnalysis(response, allowedHunks);
   }
@@ -151,7 +152,7 @@ export async function analyzeFullComparison(
         rightText: chunk.rightText,
         hunks: chunkHunks,
       }),
-      { maxTokens: 2_500, signal },
+      { maxTokens: 2_500, signal, timeoutMs: AI_ANALYSIS_REQUEST_TIMEOUT_MS },
     );
     stageResults.push(parseAiAnalysis(
       response,
@@ -168,7 +169,7 @@ export async function analyzeFullComparison(
       stageResults,
       validHunkIds: [...allowedHunks],
     }),
-    { maxTokens: 3_000, signal },
+    { maxTokens: 3_000, signal, timeoutMs: AI_ANALYSIS_REQUEST_TIMEOUT_MS },
   );
   return parseAiAnalysis(finalResponse, allowedHunks);
 }
