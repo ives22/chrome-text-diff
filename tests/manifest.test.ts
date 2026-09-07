@@ -11,6 +11,8 @@ describe("extension manifest", () => {
     expect(manifest.manifest_version).toBe(3);
     expect(manifest.permissions).toEqual(["storage", "contextMenus", "clipboardWrite"]);
     expect(manifest).not.toHaveProperty("host_permissions");
+    expect(manifest.optional_host_permissions).toEqual(["https://*/*", "http://*/*"]);
+    expect(manifest.content_security_policy.extension_pages).toContain("connect-src 'self' https: http:");
     expect(manifest).not.toHaveProperty("content_scripts");
   });
 

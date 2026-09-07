@@ -5,6 +5,10 @@
   "description": "在浏览器本地安全、清晰地比较两段文本。",
   "version": "0.2.1",
   "permissions": ["storage", "contextMenus", "clipboardWrite"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https: http:"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"
