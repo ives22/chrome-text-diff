@@ -36,3 +36,8 @@ export interface ModelConnectionResult {
   model: string;
   origin: string;
 }
+
+export interface ModelListResult {
+  baseUrl: string;
+  models: string[];
+}

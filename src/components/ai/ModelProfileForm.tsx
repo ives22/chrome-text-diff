@@ -1,14 +1,15 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { AlertTriangle, CheckCircle2, LoaderCircle, PlugZap } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ListRestart, LoaderCircle, PlugZap } from "lucide-react";
 import { isInsecureBaseUrl } from "../../ai/permissions";
 import { MODEL_PRESETS } from "../../ai/presets";
-import type { ModelConnectionResult, ModelProfile } from "../../ai/types";
+import type { ModelConnectionResult, ModelListResult, ModelProfile } from "../../ai/types";
 
 interface ModelProfileFormProps {
   initialProfile?: ModelProfile;
   hasStoredKey: boolean;
   requireSuccessfulTest?: boolean;
   submitLabel?: string;
+  onListModels: (profile: ModelProfile, apiKey?: string) => Promise<ModelListResult>;
   onTest: (profile: ModelProfile, apiKey?: string) => Promise<ModelConnectionResult>;
   onSubmit: (profile: ModelProfile, apiKey?: string) => Promise<void>;
   onCancel: () => void;
@@ -19,6 +20,7 @@ export function ModelProfileForm({
   hasStoredKey,
   requireSuccessfulTest = false,
   submitLabel = "保存配置",
+  onListModels,
   onTest,
   onSubmit,
   onCancel,
@@ -33,11 +35,14 @@ export function ModelProfileForm({
   const [provider, setProvider] = useState(initialProfile?.provider ?? preset.provider);
   const [baseUrl, setBaseUrl] = useState(initialProfile?.baseUrl ?? preset.baseUrl);
   const [model, setModel] = useState(initialProfile?.model ?? "");
+  const [manualModel, setManualModel] = useState(initialProfile?.model ?? "");
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [manualModelMode, setManualModelMode] = useState(true);
   const [apiKey, setApiKey] = useState("");
   const [storedKeyUsable, setStoredKeyUsable] = useState(hasStoredKey);
   const [rememberApiKey, setRememberApiKey] = useState(initialProfile?.rememberApiKey ?? false);
   const [httpAcknowledged, setHttpAcknowledged] = useState(false);
-  const [busy, setBusy] = useState<"test" | "save" | null>(null);
+  const [busy, setBusy] = useState<"models" | "test" | "save" | null>(null);
   const [tested, setTested] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +61,7 @@ export function ModelProfileForm({
   const hasKey = Boolean(apiKey.trim() || storedKeyUsable);
   const valid = Boolean(name.trim() && baseUrl.trim() && model.trim() && hasKey);
   const permitted = valid && (!insecure || httpAcknowledged);
+  const canListModels = Boolean(baseUrl.trim() && hasKey && (!insecure || httpAcknowledged));
 
   const resetTest = () => {
     setTested(false);
@@ -70,6 +76,9 @@ export function ModelProfileForm({
     setName(next.name);
     setBaseUrl(next.baseUrl);
     setModel("");
+    setManualModel("");
+    setAvailableModels([]);
+    setManualModelMode(true);
     setApiKey("");
     setStoredKeyUsable(Boolean(
       initialProfile &&
@@ -78,6 +87,33 @@ export function ModelProfileForm({
     ));
     setHttpAcknowledged(false);
     resetTest();
+  };
+
+  const listModels = async () => {
+    if (!canListModels) return;
+    setBusy("models");
+    setError(null);
+    try {
+      const result = await onListModels(current, apiKey.trim() || undefined);
+      setAvailableModels(result.models);
+      setBaseUrl(result.baseUrl);
+      if (result.models.includes(model)) {
+        setManualModelMode(false);
+      } else if (!model.trim() && result.models[0]) {
+        setModel(result.models[0]);
+        setManualModelMode(false);
+      } else {
+        setManualModelMode(true);
+      }
+      setTested(false);
+      setStatus(`已获取 ${result.models.length} 个模型 · API 地址已校正`);
+    } catch (listError) {
+      setAvailableModels([]);
+      setManualModelMode(true);
+      setError(listError instanceof Error ? listError.message : "获取模型列表失败。");
+    } finally {
+      setBusy(null);
+    }
   };
 
   const testConnection = async () => {
@@ -123,21 +159,71 @@ export function ModelProfileForm({
           <span>配置名称</span>
           <input aria-label="配置名称" value={name} onChange={(event) => { setName(event.target.value); resetTest(); }} />
         </label>
-        <label className="field-label">
+        <div className="field-label">
           <span>模型 ID</span>
-          <input
-            aria-label="模型 ID"
-            value={model}
-            placeholder={MODEL_PRESETS.find((item) => item.id === presetId)?.modelPlaceholder}
-            onChange={(event) => { setModel(event.target.value); resetTest(); }}
-          />
-        </label>
+          <div className="model-picker-row">
+            {availableModels.length ? (
+              <select
+                aria-label="模型 ID"
+                value={manualModelMode ? "__manual__" : model}
+                onChange={(event) => {
+                  if (event.target.value === "__manual__") {
+                    setManualModelMode(true);
+                    setModel(manualModel);
+                  } else {
+                    setManualModelMode(false);
+                    setModel(event.target.value);
+                  }
+                  resetTest();
+                }}
+              >
+                {availableModels.map((item) => <option key={item} value={item}>{item}</option>)}
+                <option value="__manual__">手动输入模型 ID</option>
+              </select>
+            ) : (
+              <input
+                aria-label="模型 ID"
+                value={model}
+                placeholder={MODEL_PRESETS.find((item) => item.id === presetId)?.modelPlaceholder}
+                onChange={(event) => {
+                  setModel(event.target.value);
+                  setManualModel(event.target.value);
+                  resetTest();
+                }}
+              />
+            )}
+            <button
+              type="button"
+              className="button button-quiet model-list-button"
+              aria-label="获取模型列表"
+              disabled={!canListModels || busy !== null}
+              onClick={() => void listModels()}
+            >
+              {busy === "models" ? <LoaderCircle className="spin" size={15} /> : <ListRestart size={15} />}
+              获取模型
+            </button>
+          </div>
+          {availableModels.length > 0 && manualModelMode && (
+            <input
+              aria-label="手动输入模型 ID"
+              value={manualModel}
+              placeholder="输入兼容服务支持的模型 ID"
+              onChange={(event) => {
+                setManualModel(event.target.value);
+                setModel(event.target.value);
+                resetTest();
+              }}
+            />
+          )}
+        </div>
       </div>
       <label className="field-label">
         <span>API 地址</span>
         <input aria-label="API 地址" inputMode="url" value={baseUrl} onChange={(event) => {
           const value = event.target.value;
           setBaseUrl(value);
+          setAvailableModels([]);
+          setManualModelMode(true);
           setStoredKeyUsable(Boolean(
             initialProfile &&
             hasStoredKey &&

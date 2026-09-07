@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Check, KeyRound, Pencil, Plus, Trash2, X } from "lucide-react";
-import type { AiSettings, ModelConnectionResult, ModelProfile } from "../../ai/types";
+import type { AiSettings, ModelConnectionResult, ModelListResult, ModelProfile } from "../../ai/types";
 import { IconButton } from "../IconButton";
 import { ModelProfileForm } from "./ModelProfileForm";
 
@@ -10,6 +10,7 @@ interface AiSettingsDrawerProps {
   secretProfileIds: Set<string>;
   onClose: () => void;
   onSave: (profile: ModelProfile, apiKey?: string) => Promise<void>;
+  onListModels: (profile: ModelProfile, apiKey?: string) => Promise<ModelListResult>;
   onTest: (profile: ModelProfile, apiKey?: string) => Promise<ModelConnectionResult>;
   onSetActive: (profileId: string) => void;
   onDelete: (profileId: string) => void;
@@ -44,6 +45,7 @@ export function AiSettingsDrawer(props: AiSettingsDrawerProps) {
             <ModelProfileForm
               initialProfile={editing === "new" ? undefined : editing}
               hasStoredKey={editing !== "new" && props.secretProfileIds.has(editing.id)}
+              onListModels={props.onListModels}
               onTest={props.onTest}
               onSubmit={finishSave}
               onCancel={() => setEditing(null)}

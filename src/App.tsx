@@ -52,6 +52,7 @@ import type {
   AiAnalysisResult,
   AiSettings,
   ModelConnectionResult,
+  ModelListResult,
   ModelProfile,
 } from "./ai/types";
 import { createUnifiedPatch, validateText } from "./core/diffEngine";
@@ -87,6 +88,11 @@ interface DiffClient {
 }
 
 interface AiClientLike {
+  listModels(
+    profile: ModelProfile,
+    apiKey: string,
+    signal?: AbortSignal,
+  ): Promise<ModelListResult>;
   complete(
     profile: ModelProfile,
     apiKey: string,
@@ -424,6 +430,14 @@ export function App({
   ): Promise<ModelConnectionResult> => {
     const secret = await resolveAiSecret(profile, apiKey);
     return aiClient.testConnection(profile, secret);
+  };
+
+  const handleListAiModels = async (
+    profile: ModelProfile,
+    apiKey?: string,
+  ): Promise<ModelListResult> => {
+    const secret = await resolveAiSecret(profile, apiKey);
+    return aiClient.listModels(profile, secret);
   };
 
   const handleSaveAiProfile = async (profile: ModelProfile, apiKey?: string) => {
@@ -1069,6 +1083,7 @@ export function App({
         secretProfileIds={secretProfileIds}
         onClose={() => setAiSettingsOpen(false)}
         onSave={handleSaveAiProfile}
+        onListModels={handleListAiModels}
         onTest={handleTestAiProfile}
         onSetActive={(profileId) => void handleSetActiveAiProfile(profileId)}
         onDelete={setPendingDeleteProfileId}
@@ -1077,6 +1092,7 @@ export function App({
       <AiSetupWizard
         open={aiHydrated && aiOnboardingOpen}
         onSkip={() => void handleSkipAiOnboarding()}
+        onListModels={handleListAiModels}
         onTest={handleTestAiProfile}
         onComplete={handleCompleteAiOnboarding}
       />

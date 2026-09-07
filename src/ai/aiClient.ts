@@ -4,7 +4,7 @@ import {
   normalizeBaseUrl,
   type PermissionAdapter,
 } from "./permissions";
-import type { ModelConnectionResult, ModelProfile } from "./types";
+import type { ModelConnectionResult, ModelListResult, ModelProfile } from "./types";
 
 export type AiClientErrorCode =
   | "AUTH_ERROR"
@@ -57,6 +57,67 @@ export class AiClient {
     this.fetch = dependencies.fetch ?? ((input, init) => window.fetch(input, init));
     this.permissions = dependencies.permissions ?? createChromePermissionAdapter();
     this.now = dependencies.now ?? Date.now;
+  }
+
+  async listModels(
+    profile: ModelProfile,
+    apiKey: string,
+    signal?: AbortSignal,
+  ): Promise<ModelListResult> {
+    if (!apiKey.trim()) {
+      throw new AiClientError("MISSING_API_KEY", "请输入 API 密钥。");
+    }
+    if (!await ensureOriginPermission(profile.baseUrl, this.permissions)) {
+      throw new AiClientError("PERMISSION_DENIED", "未获得该模型服务地址的访问权限。");
+    }
+
+    const controller = new AbortController();
+    let cancelledByCaller = false;
+    let timedOut = false;
+    const cancel = () => {
+      cancelledByCaller = true;
+      controller.abort();
+    };
+    if (signal?.aborted) cancel();
+    signal?.addEventListener("abort", cancel, { once: true });
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 20_000);
+
+    try {
+      for (const baseUrl of createModelBaseCandidates(profile.baseUrl)) {
+        const response = await this.fetch(`${baseUrl}/models`, {
+          method: "GET",
+          redirect: "error",
+          headers: { Authorization: `Bearer ${apiKey.trim()}` },
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          if (response.status === 404) continue;
+          throw mapStatusError(response.status);
+        }
+
+        const raw = await readLimitedResponse(response);
+        if (isHtmlResponse(response, raw)) continue;
+        const models = readModelIds(parseJsonResponse(raw));
+        if (models.length) return { baseUrl, models };
+      }
+      throw new AiClientError(
+        "INVALID_RESPONSE",
+        "未获取到可用模型，请检查 API 地址是否需要包含 /v1，或手动输入模型 ID。",
+      );
+    } catch (error) {
+      if (error instanceof AiClientError) throw error;
+      if (error instanceof DOMException && error.name === "AbortError") {
+        if (cancelledByCaller) throw new AiClientError("CANCELLED", "模型列表请求已取消。");
+        if (timedOut) throw new AiClientError("TIMEOUT", "获取模型列表超时。");
+      }
+      throw new AiClientError("NETWORK_ERROR", "无法获取模型列表，请检查地址和网络。");
+    } finally {
+      window.clearTimeout(timeout);
+      signal?.removeEventListener("abort", cancel);
+    }
   }
 
   async testConnection(
@@ -126,22 +187,14 @@ export class AiClient {
         signal: controller.signal,
       });
       if (!response.ok) throw mapStatusError(response.status);
-
-      let raw: string;
-      try {
-        raw = await response.text();
-      } catch {
-        throw new AiClientError("INVALID_RESPONSE", "模型返回了无法解析的响应。");
+      const raw = await readLimitedResponse(response);
+      if (isHtmlResponse(response, raw)) {
+        throw new AiClientError(
+          "INVALID_RESPONSE",
+          "模型接口返回了网页内容，请检查 API 地址是否缺少 /v1。",
+        );
       }
-      if (new TextEncoder().encode(raw).byteLength > 256 * 1024) {
-        throw new AiClientError("INVALID_RESPONSE", "模型响应超过 256 KiB 限制。");
-      }
-      let payload: unknown;
-      try {
-        payload = JSON.parse(raw);
-      } catch {
-        throw new AiClientError("INVALID_RESPONSE", "模型返回了无法解析的响应。");
-      }
+      const payload = parseJsonResponse(raw);
       const content = readCompletionContent(payload);
       if (!content) {
         throw new AiClientError("INVALID_RESPONSE", "模型响应中缺少文本内容。");
@@ -167,6 +220,15 @@ export class AiClient {
 
 export function createCompletionUrl(baseUrl: string): string {
   return `${normalizeBaseUrl(baseUrl)}/chat/completions`;
+}
+
+export function createModelBaseCandidates(baseUrl: string): string[] {
+  const normalized = normalizeBaseUrl(baseUrl);
+  const url = new URL(normalized);
+  if (url.pathname === "/") {
+    return [`${url.origin}/v1`, url.origin];
+  }
+  return [normalized];
 }
 
 function mapStatusError(status: number): AiClientError {
@@ -195,4 +257,42 @@ function readCompletionContent(payload: unknown): string | undefined {
   if (!message || typeof message !== "object") return undefined;
   const content = (message as { content?: unknown }).content;
   return typeof content === "string" && content.trim() ? content : undefined;
+}
+
+async function readLimitedResponse(response: Response): Promise<string> {
+  let raw: string;
+  try {
+    raw = await response.text();
+  } catch {
+    throw new AiClientError("INVALID_RESPONSE", "模型返回了无法解析的响应。");
+  }
+  if (new TextEncoder().encode(raw).byteLength > 256 * 1024) {
+    throw new AiClientError("INVALID_RESPONSE", "模型响应超过 256 KiB 限制。");
+  }
+  return raw;
+}
+
+function isHtmlResponse(response: Response, raw: string): boolean {
+  const contentType = response.headers?.get("Content-Type")?.toLowerCase() ?? "";
+  const start = raw.trimStart().slice(0, 32).toLowerCase();
+  return contentType.includes("text/html") || start.startsWith("<!doctype html") || start.startsWith("<html");
+}
+
+function parseJsonResponse(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new AiClientError("INVALID_RESPONSE", "模型返回了无法解析的响应。");
+  }
+}
+
+function readModelIds(payload: unknown): string[] {
+  if (!payload || typeof payload !== "object") return [];
+  const data = (payload as { data?: unknown }).data;
+  if (!Array.isArray(data)) return [];
+  const ids = data
+    .map((item) => item && typeof item === "object" ? (item as { id?: unknown }).id : undefined)
+    .filter((id): id is string => typeof id === "string" && Boolean(id.trim()))
+    .map((id) => id.trim());
+  return [...new Set(ids)].sort((left, right) => left.localeCompare(right));
 }

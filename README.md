@@ -76,6 +76,8 @@ npm run build
 - OpenAI、DeepSeek、Qwen 中国和 Qwen 国际预设
 - 任意兼容 OpenAI `POST /chat/completions` 协议的自定义地址
 - 自定义配置名称、API 地址、模型 ID 和 API 密钥
+- 使用“获取模型”读取服务端模型列表并下拉选择；不支持列表接口时仍可手动输入模型 ID
+- 根域名兼容地址会优先发现 `/v1/models`，成功后自动校正 API 地址，避免把管理页面误当作模型响应
 - 保存前连接测试；测试只发送“只回复 OK”，不包含差异文本
 
 API 密钥默认只保留在当前浏览器会话。勾选“在本机记住密钥”后，密钥会保存在 Chrome 扩展隔离的本地存储中，但不会被额外加密。HTTP 地址允许使用，但界面会要求确认明文传输风险。
@@ -118,7 +120,7 @@ npm test
 npm run build
 ```
 
-`npm run package` 会执行生产构建，并按当前版本生成 ZIP，例如 `artifacts/textdiff-v0.3.0.zip`。GitHub Actions 在每次提交和拉取请求上运行完整门禁，并上传同样的构建产物。
+`npm run package` 会执行生产构建，并按当前版本生成 ZIP，例如 `artifacts/textdiff-v0.3.1.zip`。GitHub Actions 在每次提交和拉取请求上运行完整门禁，并上传同样的构建产物。
 
 ## 技术结构
 

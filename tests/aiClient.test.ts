@@ -20,6 +20,50 @@ function createPermissions(granted = true) {
 }
 
 describe("AiClient", () => {
+  it("discovers models from /v1, deduplicates them, and reuses the resolved base URL", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: [
+          { id: "qwen-plus" },
+          { id: "deepseek-chat" },
+          { id: "qwen-plus" },
+          { id: "" },
+        ],
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: "OK" } }],
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const client = new AiClient({ fetch, permissions: createPermissions(), now: () => 1_250 });
+    const rootProfile = { ...profile, baseUrl: "https://models.example.com", model: "qwen-plus" };
+
+    const available = await client.listModels(rootProfile, "sk-private");
+    expect(available).toEqual({
+      baseUrl: "https://models.example.com/v1",
+      models: ["deepseek-chat", "qwen-plus"],
+    });
+    expect(fetch.mock.calls[0]?.[0]).toBe("https://models.example.com/v1/models");
+
+    await client.testConnection({ ...rootProfile, baseUrl: available.baseUrl }, "sk-private");
+    expect(fetch.mock.calls[1]?.[0]).toBe("https://models.example.com/v1/chat/completions");
+  });
+
+  it("falls back to a root-level model endpoint when /v1 is unavailable", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response("not found", { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ id: "root-chat" }] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }));
+    const client = new AiClient({ fetch, permissions: createPermissions() });
+
+    await expect(client.listModels({ ...profile, baseUrl: "https://models.example.com" }, "sk-private"))
+      .resolves.toEqual({ baseUrl: "https://models.example.com", models: ["root-chat"] });
+    expect(fetch.mock.calls.map((call) => call[0])).toEqual([
+      "https://models.example.com/v1/models",
+      "https://models.example.com/models",
+    ]);
+  });
+
   it("tests a profile with a minimal OpenAI-compatible request", async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       model: "example-chat",
@@ -104,6 +148,21 @@ describe("AiClient", () => {
     await expect(client.complete(profile, "sk-private", [
       { role: "user", content: "hello" },
     ])).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("explains that an HTML success response usually means /v1 is missing", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response("<!doctype html><title>Console</title>", {
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
+    }));
+    const client = new AiClient({ fetch, permissions: createPermissions() });
+
+    await expect(client.complete(profile, "sk-private", [
+      { role: "user", content: "hello" },
+    ])).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+      message: "模型接口返回了网页内容，请检查 API 地址是否缺少 /v1。",
+    });
   });
 
   it("rejects oversized success responses before parsing model output", async () => {

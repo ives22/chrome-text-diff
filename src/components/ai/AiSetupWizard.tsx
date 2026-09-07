@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { BrainCircuit, ShieldCheck, Sparkles } from "lucide-react";
-import type { ModelConnectionResult, ModelProfile } from "../../ai/types";
+import type { ModelConnectionResult, ModelListResult, ModelProfile } from "../../ai/types";
 import { ModelProfileForm } from "./ModelProfileForm";
 
 interface AiSetupWizardProps {
   open: boolean;
   onSkip: () => void;
+  onListModels: (profile: ModelProfile, apiKey?: string) => Promise<ModelListResult>;
   onTest: (profile: ModelProfile, apiKey?: string) => Promise<ModelConnectionResult>;
   onComplete: (profile: ModelProfile, apiKey?: string) => Promise<void>;
 }
 
-export function AiSetupWizard({ open, onSkip, onTest, onComplete }: AiSetupWizardProps) {
+export function AiSetupWizard({ open, onSkip, onListModels, onTest, onComplete }: AiSetupWizardProps) {
   const [stage, setStage] = useState<"intro" | "config">("intro");
   if (!open) return null;
 
@@ -39,6 +40,7 @@ export function AiSetupWizard({ open, onSkip, onTest, onComplete }: AiSetupWizar
             <p>请先完成连接测试，测试消息不包含你的差异文本。</p>
             <ModelProfileForm
               hasStoredKey={false}
+              onListModels={onListModels}
               requireSuccessfulTest
               submitLabel="完成配置"
               onTest={onTest}

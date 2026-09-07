@@ -296,6 +296,7 @@ describe("App", () => {
       dispose: vi.fn(),
     };
     const aiClient = {
+      listModels: vi.fn(),
       testConnection: vi.fn(),
       complete: vi.fn().mockResolvedValue(JSON.stringify({
         summary: "值发生变化。",
@@ -368,6 +369,7 @@ describe("App", () => {
       dispose: vi.fn(),
     };
     const aiClient = {
+      listModels: vi.fn(),
       testConnection: vi.fn(),
       complete: vi.fn().mockResolvedValue(JSON.stringify({
         summary: "当前值发生变化。",

@@ -22,6 +22,37 @@ const profile: ModelProfile = {
 };
 
 describe("ModelProfileForm", () => {
+  it("loads available models, switches to the resolved base URL, and keeps manual input available", async () => {
+    const user = userEvent.setup();
+    const onListModels = vi.fn().mockResolvedValue({
+      baseUrl: "https://models.example.com/v1",
+      models: ["deepseek-chat", "qwen-plus"],
+    });
+    const onTest = vi.fn().mockResolvedValue({ elapsedMs: 30, model: "qwen-plus", origin: "https://models.example.com" });
+    render(
+      <ModelProfileForm
+        initialProfile={{ ...profile, baseUrl: "https://models.example.com", model: "legacy-model" }}
+        hasStoredKey={false}
+        onListModels={onListModels}
+        onTest={onTest}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("API 密钥"), "sk-test");
+    await user.click(screen.getByRole("button", { name: "获取模型列表" }));
+    expect(onListModels).toHaveBeenCalledWith(expect.objectContaining({
+      baseUrl: "https://models.example.com",
+    }), "sk-test");
+    expect(screen.getByLabelText("API 地址")).toHaveValue("https://models.example.com/v1");
+
+    await user.selectOptions(screen.getByLabelText("模型 ID"), "qwen-plus");
+    expect(screen.getByLabelText("模型 ID")).toHaveValue("qwen-plus");
+    await user.selectOptions(screen.getByLabelText("模型 ID"), "__manual__");
+    expect(screen.getByLabelText("手动输入模型 ID")).toHaveValue("legacy-model");
+  });
+
   it("requires an explicit insecure HTTP acknowledgement before test or save", async () => {
     const user = userEvent.setup();
     const onTest = vi.fn().mockResolvedValue({ elapsedMs: 30, model: "chat-model", origin: "http://models.internal" });
@@ -30,6 +61,7 @@ describe("ModelProfileForm", () => {
       <ModelProfileForm
         initialProfile={profile}
         hasStoredKey={false}
+        onListModels={vi.fn()}
         onTest={onTest}
         onSubmit={onSubmit}
         onCancel={vi.fn()}
@@ -54,6 +86,7 @@ describe("ModelProfileForm", () => {
       <ModelProfileForm
         initialProfile={{ ...profile, baseUrl: "https://models.example.com/v1" }}
         hasStoredKey
+        onListModels={vi.fn()}
         onTest={vi.fn()}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
@@ -78,6 +111,7 @@ describe("AI onboarding and settings", () => {
       <AiSetupWizard
         open
         onSkip={onSkip}
+        onListModels={vi.fn()}
         onTest={vi.fn()}
         onComplete={vi.fn()}
       />,
@@ -104,6 +138,7 @@ describe("AI onboarding and settings", () => {
         secretProfileIds={new Set([profile.id])}
         onClose={vi.fn()}
         onSave={vi.fn()}
+        onListModels={vi.fn()}
         onTest={vi.fn()}
         onSetActive={onSetActive}
         onDelete={onDelete}
