@@ -39,6 +39,36 @@ export function applyHunkMerge(
   };
 }
 
+export function applyHunkReplacement(
+  draft: DraftState,
+  hunk: DiffHunk,
+  target: "left" | "right",
+  replacementText: string,
+): DraftState {
+  const replacementLines = parseLogicalLines(replacementText);
+  const replacementRange = { from: 0, to: replacementLines.length };
+  if (target === "left") {
+    return {
+      ...draft,
+      leftText: replaceLineRange(
+        draft.leftText,
+        hunk.leftRange,
+        replacementText,
+        replacementRange,
+      ),
+    };
+  }
+  return {
+    ...draft,
+    rightText: replaceLineRange(
+      draft.rightText,
+      hunk.rightRange,
+      replacementText,
+      replacementRange,
+    ),
+  };
+}
+
 function replaceLineRange(
   targetText: string,
   targetRange: LineRange,
