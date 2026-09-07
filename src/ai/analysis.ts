@@ -189,7 +189,11 @@ export function parseAiAnalysis(raw: string, allowedHunkIds: Set<string>): AiAna
   if (typeof candidate.summary !== "string" || !Array.isArray(candidate.risks)) {
     throw new Error("模型返回的分析结果缺少必要字段。");
   }
+  assertTextLimit(candidate.summary, 32 * 1024, "模型摘要过长，已拒绝使用。");
   const risks = candidate.risks.filter((risk): risk is string => typeof risk === "string").slice(0, 20);
+  for (const risk of risks) {
+    assertTextLimit(risk, 4 * 1024, "模型风险说明过长，已拒绝使用。");
+  }
   const rawSuggestions = Array.isArray(candidate.suggestions) ? candidate.suggestions : [];
   const seen = new Set<string>();
   const suggestions: HunkSuggestion[] = [];
@@ -205,6 +209,7 @@ export function parseAiAnalysis(raw: string, allowedHunkIds: Set<string>): AiAna
     ) {
       continue;
     }
+    assertTextLimit(item.explanation, 16 * 1024, "模型建议说明过长，已拒绝使用。");
     if (
       typeof item.replacementText === "string" &&
       new TextEncoder().encode(item.replacementText).byteLength > AI_REPLACEMENT_MAX_BYTES
@@ -259,20 +264,30 @@ function extractJson(raw: string): string {
 function splitUtf8ByBytes(value: string, maxBytes: number): string[] {
   if (!value) return [];
   const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const encoded = encoder.encode(value);
   const parts: string[] = [];
-  let current = "";
-  let currentBytes = 0;
-  for (const character of value) {
-    const bytes = encoder.encode(character).byteLength;
-    if (current && currentBytes + bytes > maxBytes) {
-      parts.push(current);
-      current = "";
-      currentBytes = 0;
+  let start = 0;
+  while (start < encoded.length) {
+    let end = Math.min(start + maxBytes, encoded.length);
+    if (end < encoded.length) {
+      let lineEnd = -1;
+      for (let index = end - 1; index >= start; index -= 1) {
+        if (encoded[index] === 0x0a || encoded[index] === 0x0d) {
+          lineEnd = index + 1;
+          break;
+        }
+      }
+      if (lineEnd > start) {
+        end = lineEnd;
+      } else {
+        while (end > start && (encoded[end] & 0xc0) === 0x80) end -= 1;
+      }
     }
-    current += character;
-    currentBytes += bytes;
+    if (end <= start) throw new Error("无法安全拆分 AI 输入文本。");
+    parts.push(decoder.decode(encoded.subarray(start, end)));
+    start = end;
   }
-  if (current) parts.push(current);
   return parts;
 }
 
@@ -280,4 +295,8 @@ function sliceForChunk<T>(values: T[], index: number, total: number): T[] {
   const from = Math.floor(values.length * index / total);
   const to = Math.floor(values.length * (index + 1) / total);
   return values.slice(from, to);
+}
+
+function assertTextLimit(value: string, maxBytes: number, message: string) {
+  if (new TextEncoder().encode(value).byteLength > maxBytes) throw new Error(message);
 }

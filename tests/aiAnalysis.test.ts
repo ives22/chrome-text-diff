@@ -38,11 +38,17 @@ describe("full text AI analysis planning", () => {
       expect(new TextEncoder().encode(chunk.leftText + chunk.rightText).byteLength)
         .toBeLessThanOrEqual(AI_ANALYSIS_CHUNK_BYTES);
     }
+    for (const chunk of plan.chunks.slice(0, -1)) {
+      if (chunk.leftText) expect(chunk.leftText.endsWith("\n")).toBe(true);
+      if (chunk.rightText) expect(chunk.rightText.endsWith("\n")).toBe(true);
+    }
   });
 
   it("accepts the total byte boundary and rejects one byte above it", () => {
+    const startedAt = performance.now();
     expect(createFullTextAnalysisPlan("a".repeat(AI_ANALYSIS_MAX_BYTES), "").chunks)
       .toHaveLength(8);
+    expect(performance.now() - startedAt).toBeLessThan(500);
     expect(() => createFullTextAnalysisPlan("a".repeat(AI_ANALYSIS_MAX_BYTES + 1), ""))
       .toThrow("全文 AI 分析最多支持 384 KiB");
   });
@@ -119,5 +125,18 @@ describe("parseAiAnalysis", () => {
         replacementText: "x".repeat(65 * 1024),
       }],
     }), new Set(["hunk-1"]))).toThrow("模型建议文本过长");
+  });
+
+  it("rejects oversized summary and explanation fields", () => {
+    expect(() => parseAiAnalysis(JSON.stringify({
+      summary: "x".repeat(33 * 1024),
+      risks: [],
+      suggestions: [],
+    }), new Set())).toThrow("模型摘要过长");
+    expect(() => parseAiAnalysis(JSON.stringify({
+      summary: "summary",
+      risks: [],
+      suggestions: [{ hunkId: "hunk-1", explanation: "x".repeat(17 * 1024) }],
+    }), new Set(["hunk-1"]))).toThrow("模型建议说明过长");
   });
 });

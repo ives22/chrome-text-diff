@@ -105,4 +105,13 @@ describe("AiClient", () => {
       { role: "user", content: "hello" },
     ])).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
   });
+
+  it("rejects oversized success responses before parsing model output", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response("x".repeat(256 * 1024 + 1), { status: 200 }));
+    const client = new AiClient({ fetch, permissions: createPermissions() });
+
+    await expect(client.complete(profile, "sk-private", [
+      { role: "user", content: "hello" },
+    ])).rejects.toMatchObject({ code: "INVALID_RESPONSE", message: "模型响应超过 256 KiB 限制。" });
+  });
 });

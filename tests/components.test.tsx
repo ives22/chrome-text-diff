@@ -232,6 +232,7 @@ describe("DiffViewer", () => {
     const onMerge = vi.fn();
     const onPreviousHunk = vi.fn();
     const onNextHunk = vi.fn();
+    const onExplainAi = vi.fn();
 
     function Harness({ viewMode = "split" }: { viewMode?: "split" | "unified" }) {
       const [mergePanelOpen, setMergePanelOpen] = useState(false);
@@ -249,7 +250,7 @@ describe("DiffViewer", () => {
           onNextHunk={onNextHunk}
           onMerge={onMerge}
           aiBusy={false}
-          onExplainAi={vi.fn()}
+          onExplainAi={onExplainAi}
         />
       );
     }
@@ -280,6 +281,8 @@ describe("DiffViewer", () => {
     await user.click(screen.getByRole("button", { name: "下一个差异" }));
     expect(onPreviousHunk).toHaveBeenCalledOnce();
     expect(onNextHunk).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "AI 解释当前差异" }));
+    expect(onExplainAi).toHaveBeenCalledOnce();
 
     const footerButtons = within(footer as HTMLElement).getAllByRole("button");
     expect(footerButtons.map((button) => button.getAttribute("aria-label"))).toEqual([

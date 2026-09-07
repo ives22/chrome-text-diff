@@ -2081,11 +2081,11 @@ input:focus-visible,
   }
 
   .ai-result-drawer {
-    width: 360px;
+    width: 380px;
   }
 
   .ai-drawer-open .main-workspace {
-    margin-right: 360px;
+    margin-right: 0;
   }
 }
 

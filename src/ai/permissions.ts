@@ -41,6 +41,8 @@ export async function ensureOriginPermission(
   baseUrl: string,
   permissions: PermissionAdapter,
 ): Promise<boolean> {
+  // Request the configured origin only; the manifest declares the wider range as optional.
+  // https://developer.chrome.com/docs/extensions/reference/api/permissions
   const request = { origins: [getOriginPattern(baseUrl)] };
   if (await permissions.contains(request)) return true;
   return permissions.request(request);

@@ -36,7 +36,6 @@ export interface ChatMessage {
 
 export interface CompletionOptions {
   maxTokens?: number;
-  temperature?: number;
   signal?: AbortSignal;
   timeoutMs?: number;
 }
@@ -55,7 +54,7 @@ export class AiClient {
   private readonly now: () => number;
 
   constructor(dependencies: AiClientDependencies = {}) {
-    this.fetch = dependencies.fetch ?? fetch;
+    this.fetch = dependencies.fetch ?? ((input, init) => window.fetch(input, init));
     this.permissions = dependencies.permissions ?? createChromePermissionAdapter();
     this.now = dependencies.now ?? Date.now;
   }
@@ -68,7 +67,6 @@ export class AiClient {
     const startedAt = this.now();
     await this.complete(profile, apiKey, [{ role: "user", content: "只回复 OK" }], {
       maxTokens: 8,
-      temperature: 0,
       timeoutMs: 20_000,
       signal,
     });
@@ -111,6 +109,8 @@ export class AiClient {
         throw new AiClientError("CANCELLED", "AI 请求已取消。");
       }
       const response = await this.fetch(createCompletionUrl(profile.baseUrl), {
+        // OpenAI-compatible Chat Completions contract:
+        // https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
         method: "POST",
         redirect: "error",
         headers: {
@@ -121,16 +121,24 @@ export class AiClient {
           model: profile.model,
           messages,
           stream: false,
-          temperature: options.temperature ?? 0.2,
           max_tokens: options.maxTokens ?? 2_500,
         }),
         signal: controller.signal,
       });
       if (!response.ok) throw mapStatusError(response.status);
 
+      let raw: string;
+      try {
+        raw = await response.text();
+      } catch {
+        throw new AiClientError("INVALID_RESPONSE", "模型返回了无法解析的响应。");
+      }
+      if (new TextEncoder().encode(raw).byteLength > 256 * 1024) {
+        throw new AiClientError("INVALID_RESPONSE", "模型响应超过 256 KiB 限制。");
+      }
       let payload: unknown;
       try {
-        payload = await response.json();
+        payload = JSON.parse(raw);
       } catch {
         throw new AiClientError("INVALID_RESPONSE", "模型返回了无法解析的响应。");
       }

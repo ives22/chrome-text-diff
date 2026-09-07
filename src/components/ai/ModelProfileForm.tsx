@@ -34,6 +34,7 @@ export function ModelProfileForm({
   const [baseUrl, setBaseUrl] = useState(initialProfile?.baseUrl ?? preset.baseUrl);
   const [model, setModel] = useState(initialProfile?.model ?? "");
   const [apiKey, setApiKey] = useState("");
+  const [storedKeyUsable, setStoredKeyUsable] = useState(hasStoredKey);
   const [rememberApiKey, setRememberApiKey] = useState(initialProfile?.rememberApiKey ?? false);
   const [httpAcknowledged, setHttpAcknowledged] = useState(false);
   const [busy, setBusy] = useState<"test" | "save" | null>(null);
@@ -52,7 +53,7 @@ export function ModelProfileForm({
     ...(initialProfile?.consentedOrigin ? { consentedOrigin: initialProfile.consentedOrigin } : {}),
   }), [baseUrl, id, initialProfile, model, name, provider, rememberApiKey]);
   const insecure = safelyIsInsecure(baseUrl);
-  const hasKey = Boolean(apiKey.trim() || hasStoredKey);
+  const hasKey = Boolean(apiKey.trim() || storedKeyUsable);
   const valid = Boolean(name.trim() && baseUrl.trim() && model.trim() && hasKey);
   const permitted = valid && (!insecure || httpAcknowledged);
 
@@ -68,6 +69,13 @@ export function ModelProfileForm({
     setProvider(next.provider);
     setName(next.name);
     setBaseUrl(next.baseUrl);
+    setModel("");
+    setApiKey("");
+    setStoredKeyUsable(Boolean(
+      initialProfile &&
+      hasStoredKey &&
+      safelyOrigin(next.baseUrl) === safelyOrigin(initialProfile.baseUrl),
+    ));
     setHttpAcknowledged(false);
     resetTest();
   };
@@ -127,7 +135,17 @@ export function ModelProfileForm({
       </div>
       <label className="field-label">
         <span>API 地址</span>
-        <input aria-label="API 地址" inputMode="url" value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); setHttpAcknowledged(false); resetTest(); }} />
+        <input aria-label="API 地址" inputMode="url" value={baseUrl} onChange={(event) => {
+          const value = event.target.value;
+          setBaseUrl(value);
+          setStoredKeyUsable(Boolean(
+            initialProfile &&
+            hasStoredKey &&
+            safelyOrigin(value) === safelyOrigin(initialProfile.baseUrl),
+          ));
+          setHttpAcknowledged(false);
+          resetTest();
+        }} />
       </label>
       <label className="field-label">
         <span>API 密钥</span>
@@ -194,5 +212,13 @@ function safelyIsInsecure(value: string): boolean {
     return isInsecureBaseUrl(value);
   } catch {
     return false;
+  }
+}
+
+function safelyOrigin(value: string): string | undefined {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return undefined;
   }
 }

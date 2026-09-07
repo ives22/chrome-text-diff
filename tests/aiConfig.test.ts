@@ -95,6 +95,24 @@ describe("AI settings storage", () => {
     expect(settings).toEqual(createDefaultAiSettings());
   });
 
+  it("sanitizes stored profile metadata and drops invalid profiles", async () => {
+    const storage = createStorage();
+    (storage.local as MemoryArea).data[AI_SETTINGS_KEY] = {
+      schemaVersion: 1,
+      onboardingCompleted: true,
+      activeProfileId: profile.id,
+      profiles: [
+        { ...profile, apiKey: "must-not-enter-state", unexpected: "value" },
+        { ...profile, id: "invalid", baseUrl: "javascript:alert(1)" },
+      ],
+    };
+
+    const settings = await loadAiSettings(storage);
+    expect(settings.profiles).toEqual([profile]);
+    expect(JSON.stringify(settings)).not.toContain("must-not-enter-state");
+    expect(JSON.stringify(settings)).not.toContain("unexpected");
+  });
+
   it("stores session secrets separately from profile metadata", async () => {
     const storage = createStorage();
     const settings = await saveModelProfile(
@@ -154,6 +172,22 @@ describe("AI settings storage", () => {
     expect(settings.profiles).toEqual([]);
     expect(JSON.stringify((storage.local as MemoryArea).data)).not.toContain("sk-delete-me");
     expect(JSON.stringify((storage.session as MemoryArea).data)).not.toContain("sk-delete-me");
+  });
+
+  it("requires a new key when a saved profile moves to another origin", async () => {
+    const storage = createStorage();
+    const settings = await saveModelProfile(
+      createDefaultAiSettings(),
+      profile,
+      "sk-original-origin",
+      storage,
+    );
+
+    await expect(saveModelProfile(settings, {
+      ...profile,
+      baseUrl: "https://other.example.com/v1",
+    }, undefined, storage)).rejects.toThrow("地址变更后必须重新输入 API 密钥");
+    expect(await getModelSecret(profile, storage)).toBe("sk-original-origin");
   });
 
   it("completes onboarding and switches the active profile without changing secrets", async () => {

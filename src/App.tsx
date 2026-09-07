@@ -478,6 +478,12 @@ export function App({
     const profile = aiSettings.profiles.find((item) => item.id === profileId);
     if (!profile) return;
     try {
+      if (aiSettings.activeProfileId === profileId) {
+        aiAbortController.current?.abort();
+        aiAbortController.current = null;
+        aiRunningScope.current = null;
+        setAiRuns({ full: createEmptyAiRun(), hunk: createEmptyAiRun() });
+      }
       const next = await deleteModelProfile(aiSettings, profileId, aiStorage);
       setAiSettings(next);
       setSecretProfileIds((current) => {
@@ -532,20 +538,25 @@ export function App({
 
     try {
       const contexts = createAiHunkContexts(resultSnapshot);
-      const analysis = action.scope === "full"
-        ? await analyzeFullComparison(aiClient, profile, secret, {
+      let analysis: AiAnalysisResult;
+      if (action.scope === "full") {
+        analysis = await analyzeFullComparison(aiClient, profile, secret, {
             leftText: draftSnapshot.leftText,
             rightText: draftSnapshot.rightText,
             leftName: draftSnapshot.leftName,
             rightName: draftSnapshot.rightName,
             hunks: contexts,
-          }, controller.signal)
-        : await analyzeHunk(aiClient, profile, secret, {
-            ...contexts[action.hunkIndex ?? activeHunkIndex]!,
-            leftName: draftSnapshot.leftName,
-            rightName: draftSnapshot.rightName,
-            options: draftSnapshot.options,
           }, controller.signal);
+      } else {
+        const context = contexts[action.hunkIndex ?? activeHunkIndex];
+        if (!context) throw new Error("当前差异块已失效，请重新选择后再分析。");
+        analysis = await analyzeHunk(aiClient, profile, secret, {
+          ...context,
+          leftName: draftSnapshot.leftName,
+          rightName: draftSnapshot.rightName,
+          options: draftSnapshot.options,
+        }, controller.signal);
+      }
       if (aiAbortController.current !== controller) return;
       updateAiRun(action.scope, {
         result: analysis,

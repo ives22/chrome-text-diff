@@ -47,6 +47,27 @@ describe("ModelProfileForm", () => {
     await user.click(screen.getByRole("button", { name: "保存配置" }));
     expect(onSubmit).toHaveBeenCalledOnce();
   });
+
+  it("does not reuse a stored key after the API origin changes", async () => {
+    const user = userEvent.setup();
+    render(
+      <ModelProfileForm
+        initialProfile={{ ...profile, baseUrl: "https://models.example.com/v1" }}
+        hasStoredKey
+        onTest={vi.fn()}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "测试连接" })).toBeEnabled();
+    await user.clear(screen.getByLabelText("API 地址"));
+    await user.type(screen.getByLabelText("API 地址"), "https://other.example.com/v1");
+    expect(screen.getByRole("button", { name: "测试连接" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "保存配置" })).toBeDisabled();
+    await user.type(screen.getByLabelText("API 密钥"), "sk-new-origin");
+    expect(screen.getByRole("button", { name: "测试连接" })).toBeEnabled();
+  });
 });
 
 describe("AI onboarding and settings", () => {
