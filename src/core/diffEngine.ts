@@ -1,17 +1,14 @@
 import {
   createTwoFilesPatch,
   diffArrays,
-  diffChars,
-  diffWordsWithSpace,
-  type Change,
 } from "diff";
 import type {
   CompareOptions,
   DiffCell,
   DiffResult,
   DiffRow,
-  DiffSegment,
 } from "./types";
+import { createBlockDiff } from "./blockDiff";
 
 export const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 export const MAX_TEXT_LINES = 20_000;
@@ -65,6 +62,11 @@ export function computeDiff(
   let rightCursor = 0;
   let changeIndex = 0;
   let hunkIndex = 0;
+  let addedUnits = 0;
+  let removedUnits = 0;
+  let addedLines = 0;
+  let removedLines = 0;
+  let unchangedLines = 0;
 
   while (changeIndex < changes.length) {
     const change = changes[changeIndex];
@@ -79,6 +81,7 @@ export function computeDiff(
         });
         leftCursor += 1;
         rightCursor += 1;
+        unchangedLines += 1;
       }
       changeIndex += 1;
       continue;
@@ -104,24 +107,30 @@ export function computeDiff(
     const hunkId = `hunk-${hunkIndex}`;
     const rowStart = rows.length;
     const alignedCount = Math.max(removed.length, added.length);
+    const blockDiff = createBlockDiff(
+      removed.map((line) => line.original),
+      added.map((line) => line.original),
+      options,
+    );
+
+    removedUnits += blockDiff.removedUnits;
+    addedUnits += blockDiff.addedUnits;
+    removedLines += removed.length;
+    addedLines += added.length;
 
     for (let index = 0; index < alignedCount; index += 1) {
       const leftLine = removed[index];
       const rightLine = added[index];
-      const pairedSegments =
-        leftLine && rightLine
-          ? createInlineSegments(leftLine.original, rightLine.original, options)
-          : undefined;
 
       rows.push({
         id: `row-${rows.length + 1}`,
         hunkId,
         kind: leftLine && rightLine ? "change" : leftLine ? "remove" : "add",
         left: leftLine
-          ? { ...toCell(leftLine), segments: pairedSegments?.left }
+          ? { ...toCell(leftLine), segments: blockDiff.leftSegments[index] }
           : undefined,
         right: rightLine
-          ? { ...toCell(rightLine), segments: pairedSegments?.right }
+          ? { ...toCell(rightLine), segments: blockDiff.rightSegments[index] }
           : undefined,
       });
     }
@@ -139,9 +148,11 @@ export function computeDiff(
     rows,
     hunks,
     stats: {
-      added: rows.filter((row) => row.kind === "add" || row.kind === "change").length,
-      removed: rows.filter((row) => row.kind === "remove" || row.kind === "change").length,
-      unchanged: rows.filter((row) => row.kind === "equal").length,
+      addedUnits,
+      removedUnits,
+      addedLines,
+      removedLines,
+      unchangedLines,
       hunks: hunks.length,
     },
   };
@@ -189,38 +200,4 @@ function toCell(line: undefined): undefined;
 function toCell(line: LineRecord | undefined): DiffCell | undefined {
   if (!line) return undefined;
   return { lineNumber: line.lineNumber, text: line.original };
-}
-
-function createInlineSegments(
-  left: string,
-  right: string,
-  options: CompareOptions,
-): { left: DiffSegment[]; right: DiffSegment[] } {
-  const useCharacters =
-    options.granularity === "character" ||
-    (options.granularity === "smart" && shouldUseCharacterDiff(left, right));
-  const changes = useCharacters
-    ? diffChars(left, right, { ignoreCase: options.ignoreCase })
-    : diffWordsWithSpace(left, right, { ignoreCase: options.ignoreCase });
-
-  return {
-    left: changes
-      .filter((change) => !change.added)
-      .map((change) => toSegment(change, "remove")),
-    right: changes
-      .filter((change) => !change.removed)
-      .map((change) => toSegment(change, "add")),
-  };
-}
-
-function shouldUseCharacterDiff(left: string, right: string): boolean {
-  const combined = `${left}${right}`;
-  return /[\u3400-\u9fff\uf900-\ufaff]/u.test(combined) || !/\s/u.test(combined.trim());
-}
-
-function toSegment(change: Change, changedType: "add" | "remove"): DiffSegment {
-  return {
-    type: change.added || change.removed ? changedType : "equal",
-    value: change.value,
-  };
 }

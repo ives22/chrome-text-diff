@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_COMPARE_OPTIONS, type DiffStats } from "../src/core/types";
+import { compressToUTF16 } from "lz-string";
+import { DEFAULT_COMPARE_OPTIONS, type HistoryStats } from "../src/core/types";
 import {
   MAX_HISTORY_ENTRIES,
   STORAGE_KEY,
@@ -26,14 +27,66 @@ class MemoryStorage implements StorageAdapter {
   }
 }
 
-const stats: DiffStats = { added: 1, removed: 1, unchanged: 3, hunks: 1 };
+const stats: HistoryStats = {
+  addedLines: 1,
+  removedLines: 1,
+  unchangedLines: 3,
+  hunks: 1,
+};
 
 describe("app storage", () => {
   it("returns a versioned default state when storage is empty", async () => {
     const state = await loadAppState(new MemoryStorage());
 
     expect(state).toEqual(createDefaultAppState());
-    expect(state.schemaVersion).toBe(1);
+    expect(state.schemaVersion).toBe(2);
+  });
+
+  it("migrates version one drafts and history without losing text", async () => {
+    const storage = new MemoryStorage();
+    storage.data[STORAGE_KEY] = {
+      schemaVersion: 1,
+      settings: { theme: "dark", sidebarCollapsed: true },
+      draft: {
+        leftText: encodeLegacyText("legacy left"),
+        rightText: encodeLegacyText("legacy right"),
+        leftName: "before.yaml",
+        rightName: "after.yaml",
+        options: DEFAULT_COMPARE_OPTIONS,
+        updatedAt: "2026-09-05T00:00:00.000Z",
+      },
+      history: [{
+        id: "legacy-history",
+        title: "旧版记录",
+        createdAt: "2026-09-05T00:00:00.000Z",
+        leftName: "before.yaml",
+        rightName: "after.yaml",
+        leftText: encodeLegacyText("old content"),
+        rightText: encodeLegacyText("new content"),
+        options: DEFAULT_COMPARE_OPTIONS,
+        stats: { added: 7, removed: 5, unchanged: 11, hunks: 2 },
+      }],
+    };
+
+    const state = await loadAppState(storage);
+
+    expect(state.schemaVersion).toBe(2);
+    expect(state.draft).toMatchObject({
+      leftText: "legacy left",
+      rightText: "legacy right",
+      leftName: "before.yaml",
+      rightName: "after.yaml",
+    });
+    expect(state.history[0]).toMatchObject({
+      leftText: "old content",
+      rightText: "new content",
+      stats: {
+        addedLines: 7,
+        removedLines: 5,
+        unchangedLines: 11,
+        hunks: 2,
+      },
+    });
   });
 
   it("round-trips compressed draft and history text", async () => {
@@ -149,3 +202,7 @@ describe("app storage", () => {
     await expect(loadAppState(storage)).resolves.toEqual(createDefaultAppState());
   });
 });
+
+function encodeLegacyText(value: string) {
+  return { encoding: "lz-utf16", value: compressToUTF16(value) };
+}

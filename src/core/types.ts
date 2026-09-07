@@ -41,9 +41,18 @@ export interface DiffHunk {
 }
 
 export interface DiffStats {
-  added: number;
-  removed: number;
-  unchanged: number;
+  addedUnits: number;
+  removedUnits: number;
+  addedLines: number;
+  removedLines: number;
+  unchangedLines: number;
+  hunks: number;
+}
+
+export interface HistoryStats {
+  addedLines: number;
+  removedLines: number;
+  unchangedLines: number;
   hunks: number;
 }
 

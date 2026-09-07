@@ -3,6 +3,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import packageJson from "../package.json";
 import manifest from "../public/manifest.json";
 
 describe("extension manifest", () => {
@@ -18,5 +19,10 @@ describe("extension manifest", () => {
       expect(existsSync(resolve("public", iconPath))).toBe(true);
       expect(iconPath.endsWith(".png")).toBe(true);
     }
+  });
+
+  it("keeps the extension and package versions aligned", () => {
+    expect(manifest.version).toBe("0.1.1");
+    expect(manifest.version).toBe(packageJson.version);
   });
 });

@@ -256,7 +256,12 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
       leftText: state.draft.leftText,
       rightText: state.draft.rightText,
       options: state.draft.options,
-      stats: result.stats,
+      stats: {
+        addedLines: result.stats.addedLines,
+        removedLines: result.stats.removedLines,
+        unchangedLines: result.stats.unchangedLines,
+        hunks: result.stats.hunks,
+      },
     });
     setState((current) => addHistoryEntry(current, entry));
     setNotice("比较已保存到本地历史。");

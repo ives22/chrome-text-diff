@@ -3,7 +3,7 @@
   "name": "文本对比 TextDiff",
   "short_name": "TextDiff",
   "description": "在浏览器本地安全、清晰地比较两段文本。",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "permissions": ["storage", "contextMenus", "clipboardWrite"],
   "background": {
     "service_worker": "background.js",

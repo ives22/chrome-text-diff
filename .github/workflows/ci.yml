@@ -43,5 +43,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: textdiff-extension
-          path: artifacts/textdiff-v0.1.0.zip
+          path: artifacts/textdiff-v*.zip
           if-no-files-found: error

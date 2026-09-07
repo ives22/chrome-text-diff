@@ -28,7 +28,14 @@ class FakeWorker implements WorkerLike {
 const emptyResult: DiffResult = {
   rows: [],
   hunks: [],
-  stats: { added: 0, removed: 0, unchanged: 0, hunks: 0 },
+  stats: {
+    addedUnits: 0,
+    removedUnits: 0,
+    addedLines: 0,
+    removedLines: 0,
+    unchangedLines: 0,
+    hunks: 0,
+  },
 };
 
 describe("DiffWorkerClient", () => {

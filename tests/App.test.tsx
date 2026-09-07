@@ -20,7 +20,14 @@ vi.mock("@uiw/react-codemirror", () => ({
 }));
 
 const result: DiffResult = {
-  stats: { added: 1, removed: 1, unchanged: 0, hunks: 1 },
+  stats: {
+    addedUnits: 1,
+    removedUnits: 1,
+    addedLines: 1,
+    removedLines: 1,
+    unchangedLines: 0,
+    hunks: 1,
+  },
   hunks: [{ id: "hunk-1", rowStart: 0, rowEnd: 0, leftStart: 1, rightStart: 1 }],
   rows: [
     {

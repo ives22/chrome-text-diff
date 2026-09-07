@@ -7,7 +7,7 @@ TextDiff 是一个面向配置、代码和短日志的 Chrome 文本对比扩展
 ## 功能
 
 - 双栏 CodeMirror 文本编辑器，支持粘贴、拖放和 UTF-8 文本文件导入
-- 拆分与统一视图，行级统计和词内差异高亮
+- 拆分与统一视图，差异单元/受影响行统计和块级行内高亮
 - 智能、单词、字符三种比对精度
 - 忽略大小写、空白变化或空行
 - 差异块循环导航、自动换行、左右文本交换
@@ -85,13 +85,14 @@ npm test
 npm run build
 ```
 
-`npm run package` 会执行生产构建，并生成 `artifacts/textdiff-v0.1.0.zip`。GitHub Actions 在每次提交和拉取请求上运行完整门禁，并上传同样的 ZIP 构建产物。
+`npm run package` 会执行生产构建，并按当前版本生成 ZIP，例如 `artifacts/textdiff-v0.1.1.zip`。GitHub Actions 在每次提交和拉取请求上运行完整门禁，并上传同样的构建产物。
 
 ## 技术结构
 
 - React + TypeScript + Vite：工作台和生产构建
 - CodeMirror 6：文本输入
-- jsdiff：行、单词和字符差异算法
+- jsdiff：稳定的行级对齐以及强制单词/字符模式
+- CodeMirror Merge：智能模式的块级可展示差异范围
 - Web Worker：隔离大文本计算；新请求会终止旧任务
 - TanStack Virtual：虚拟化差异行
 - Chrome Manifest V3：工具栏、右键菜单和本地存储

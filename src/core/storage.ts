@@ -2,7 +2,7 @@ import { compressToUTF16, decompressFromUTF16 } from "lz-string";
 import {
   DEFAULT_COMPARE_OPTIONS,
   type CompareOptions,
-  type DiffStats,
+  type HistoryStats,
   type ThemeMode,
 } from "./types";
 
@@ -35,11 +35,11 @@ export interface HistoryEntry {
   leftText: string;
   rightText: string;
   options: CompareOptions;
-  stats: DiffStats;
+  stats: HistoryStats;
 }
 
 export interface AppState {
-  schemaVersion: 1;
+  schemaVersion: 2;
   settings: AppSettings;
   draft: DraftState;
   history: HistoryEntry[];
@@ -57,7 +57,7 @@ interface StoredText {
   value: string;
 }
 
-interface StoredAppState extends Omit<AppState, "draft" | "history"> {
+interface StoredAppStateV2 extends Omit<AppState, "draft" | "history"> {
   draft: Omit<DraftState, "leftText" | "rightText"> & {
     leftText: StoredText;
     rightText: StoredText;
@@ -70,9 +70,34 @@ interface StoredAppState extends Omit<AppState, "draft" | "history"> {
   >;
 }
 
+interface LegacyHistoryStats {
+  added: number;
+  removed: number;
+  unchanged: number;
+  hunks: number;
+}
+
+interface StoredAppStateV1 {
+  schemaVersion: 1;
+  settings: AppSettings;
+  draft: Omit<DraftState, "leftText" | "rightText"> & {
+    leftText: StoredText;
+    rightText: StoredText;
+  };
+  history: Array<
+    Omit<HistoryEntry, "leftText" | "rightText" | "stats"> & {
+      leftText: StoredText;
+      rightText: StoredText;
+      stats: LegacyHistoryStats;
+    }
+  >;
+}
+
+type StoredAppState = StoredAppStateV1 | StoredAppStateV2;
+
 export function createDefaultAppState(): AppState {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     settings: { theme: "system", sidebarCollapsed: false },
     draft: {
       leftText: "",
@@ -126,7 +151,7 @@ export async function loadAppState(adapter = createDefaultStorageAdapter()): Pro
   try {
     const stored = (await adapter.get(STORAGE_KEY))[STORAGE_KEY];
     if (!isStoredAppState(stored)) return createDefaultAppState();
-    return decodeState(stored);
+    return stored.schemaVersion === 1 ? migrateVersionOne(stored) : decodeState(stored);
   } catch {
     return createDefaultAppState();
   }
@@ -184,9 +209,9 @@ export function createDefaultStorageAdapter(): StorageAdapter {
   };
 }
 
-function encodeState(state: AppState): StoredAppState {
+function encodeState(state: AppState): StoredAppStateV2 {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     settings: state.settings,
     draft: {
       ...state.draft,
@@ -201,9 +226,9 @@ function encodeState(state: AppState): StoredAppState {
   };
 }
 
-function decodeState(stored: StoredAppState): AppState {
+function decodeState(stored: StoredAppStateV2): AppState {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     settings: stored.settings,
     draft: {
       ...stored.draft,
@@ -214,6 +239,29 @@ function decodeState(stored: StoredAppState): AppState {
       ...entry,
       leftText: decodeText(entry.leftText),
       rightText: decodeText(entry.rightText),
+    })),
+  };
+}
+
+function migrateVersionOne(stored: StoredAppStateV1): AppState {
+  return {
+    schemaVersion: 2,
+    settings: stored.settings,
+    draft: {
+      ...stored.draft,
+      leftText: decodeText(stored.draft.leftText),
+      rightText: decodeText(stored.draft.rightText),
+    },
+    history: stored.history.map((entry) => ({
+      ...entry,
+      leftText: decodeText(entry.leftText),
+      rightText: decodeText(entry.rightText),
+      stats: {
+        addedLines: entry.stats.added,
+        removedLines: entry.stats.removed,
+        unchangedLines: entry.stats.unchanged,
+        hunks: entry.stats.hunks,
+      },
     })),
   };
 }
@@ -234,7 +282,7 @@ function isStoredAppState(value: unknown): value is StoredAppState {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<StoredAppState>;
   return (
-    candidate.schemaVersion === 1 &&
+    (candidate.schemaVersion === 1 || candidate.schemaVersion === 2) &&
     Boolean(candidate.settings) &&
     Boolean(candidate.draft) &&
     Array.isArray(candidate.history)

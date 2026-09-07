@@ -814,6 +814,25 @@ input:focus-visible,
   font-family: "IBM Plex Mono", monospace;
 }
 
+.stat strong {
+  font-size: inherit;
+  font-weight: 500;
+}
+
+.stat-detail {
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.stat-detail::before {
+  content: "（";
+}
+
+.stat-detail::after {
+  content: "）";
+}
+
 .stat span {
   display: inline-grid;
   place-items: center;
@@ -1283,6 +1302,10 @@ input:focus-visible,
 
   .diff-viewer {
     margin: 0 8px 8px;
+  }
+
+  .stat-detail {
+    display: none;
   }
 }
 

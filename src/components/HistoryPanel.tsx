@@ -81,7 +81,9 @@ export function HistoryPanel({
             )}
             <div className="history-footer">
               <span><Clock3 size={12} />{formatDate(entry.createdAt)}</span>
-              <span className="history-stats">−{entry.stats.removed} +{entry.stats.added}</span>
+              <span className="history-stats" title="受影响行数">
+                −{entry.stats.removedLines} +{entry.stats.addedLines}
+              </span>
               <IconButton label={`重命名 ${entry.title}`} onClick={() => beginRename(entry)}>
                 <Edit3 size={14} />
               </IconButton>

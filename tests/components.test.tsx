@@ -23,7 +23,14 @@ vi.mock("@uiw/react-codemirror", () => ({
 }));
 
 const result: DiffResult = {
-  stats: { added: 1, removed: 1, unchanged: 1, hunks: 1 },
+  stats: {
+    addedUnits: 1,
+    removedUnits: 1,
+    addedLines: 1,
+    removedLines: 1,
+    unchangedLines: 1,
+    hunks: 1,
+  },
   hunks: [{ id: "hunk-1", rowStart: 1, rowEnd: 1, leftStart: 2, rightStart: 2 }],
   rows: [
     {
@@ -106,8 +113,9 @@ describe("DiffViewer", () => {
       />,
     );
 
-    expect(screen.getByText("1 行新增")).toBeInTheDocument();
-    expect(screen.getByText("1 行删除")).toBeInTheDocument();
+    expect(screen.getByText("1 新增")).toBeInTheDocument();
+    expect(screen.getByText("1 删除")).toBeInTheDocument();
+    expect(screen.getAllByText("1 行")).toHaveLength(2);
     expect(screen.getAllByText("alpha")).toHaveLength(2);
     expect(screen.getByText("eta")).toHaveClass("segment-remove");
     expect(screen.getByText("ravo")).toHaveClass("segment-add");
@@ -129,7 +137,14 @@ describe("DiffViewer", () => {
 
   it("does not show a change marker in an empty split placeholder", () => {
     const additionOnly: DiffResult = {
-      stats: { added: 1, removed: 0, unchanged: 0, hunks: 1 },
+      stats: {
+        addedUnits: 1,
+        removedUnits: 0,
+        addedLines: 1,
+        removedLines: 0,
+        unchangedLines: 0,
+        hunks: 1,
+      },
       hunks: [{ id: "hunk-1", rowStart: 0, rowEnd: 0, rightStart: 1 }],
       rows: [{
         id: "row-1",
@@ -151,6 +166,35 @@ describe("DiffViewer", () => {
     expect(screen.getByLabelText("左侧空白占位")).toHaveTextContent("");
     expect(screen.getByLabelText("右侧新增第 1 行")).toHaveTextContent("+new line");
   });
+
+  it("shows Diffchecker-compatible units with affected lines as secondary text", () => {
+    render(
+      <DiffViewer
+        result={{
+          ...result,
+          stats: {
+            addedUnits: 67,
+            removedUnits: 57,
+            addedLines: 61,
+            removedLines: 50,
+            unchangedLines: 74,
+            hunks: 22,
+          },
+        }}
+        viewMode="split"
+        wrapLines
+        activeHunkIndex={0}
+      />,
+    );
+
+    expect(screen.getByText("57 删除")).toBeInTheDocument();
+    expect(screen.getByText("67 新增")).toBeInTheDocument();
+    expect(screen.getByText("50 行")).toBeInTheDocument();
+    expect(screen.getByText("61 行")).toBeInTheDocument();
+    expect(screen.getByText("74 行未变")).toBeInTheDocument();
+    expect(screen.getByTitle("57 个删除差异单元，影响 50 行")).toBeInTheDocument();
+    expect(screen.getByTitle("67 个新增差异单元，影响 61 行")).toBeInTheDocument();
+  });
 });
 
 describe("HistoryPanel", () => {
@@ -164,7 +208,12 @@ describe("HistoryPanel", () => {
         leftText: "a",
         rightText: "b",
         options: DEFAULT_COMPARE_OPTIONS,
-        stats: result.stats,
+        stats: {
+          addedLines: result.stats.addedLines,
+          removedLines: result.stats.removedLines,
+          unchangedLines: result.stats.unchangedLines,
+          hunks: result.stats.hunks,
+        },
       },
       { id: "history-1", now: "2026-09-05T00:00:00.000Z" },
     );

@@ -67,9 +67,17 @@ export function DiffViewer({ result, viewMode, wrapLines, activeHunkIndex }: Dif
   return (
     <section className="diff-viewer" aria-label="差异结果">
       <header className="diff-summary">
-        <div className="stat stat-remove"><span aria-hidden="true">−</span>{result.stats.removed} 行删除</div>
-        <div className="stat stat-add"><span aria-hidden="true">+</span>{result.stats.added} 行新增</div>
-        <div className="stat stat-neutral">{result.stats.unchanged} 行未变</div>
+        <DiffStat
+          kind="remove"
+          units={result.stats.removedUnits}
+          lines={result.stats.removedLines}
+        />
+        <DiffStat
+          kind="add"
+          units={result.stats.addedUnits}
+          lines={result.stats.addedLines}
+        />
+        <div className="stat stat-neutral">{result.stats.unchangedLines} 行未变</div>
         <div className="hunk-summary">{result.stats.hunks} 处差异</div>
       </header>
       <div
@@ -105,6 +113,31 @@ export function DiffViewer({ result, viewMode, wrapLines, activeHunkIndex }: Dif
         </div>
       </div>
     </section>
+  );
+}
+
+function DiffStat({
+  kind,
+  units,
+  lines,
+}: {
+  kind: "add" | "remove";
+  units: number;
+  lines: number;
+}) {
+  const action = kind === "add" ? "新增" : "删除";
+  const description = `${units} 个${action}差异单元，影响 ${lines} 行`;
+
+  return (
+    <div
+      className={`stat stat-${kind}`}
+      aria-label={description}
+      title={description}
+    >
+      <span aria-hidden="true">{kind === "add" ? "+" : "−"}</span>
+      <strong>{units} {action}</strong>
+      <small className="stat-detail">{lines} 行</small>
+    </div>
   );
 }
 
