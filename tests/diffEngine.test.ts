@@ -41,6 +41,31 @@ describe("computeDiff", () => {
     expect(result.rows[1]?.right?.text).toBe("baz");
     expect(result.rows[2]?.left).toBeUndefined();
     expect(result.rows[2]?.right?.lineNumber).toBe(3);
+    expect(result.hunks[0]).toMatchObject({
+      leftRange: { from: 1, to: 2 },
+      rightRange: { from: 1, to: 3 },
+    });
+  });
+
+  it("anchors pure additions before the next original line", () => {
+    const result = computeDiff("alpha\nomega", "alpha\ninserted\nomega", DEFAULT_COMPARE_OPTIONS);
+
+    expect(result.hunks[0]).toMatchObject({
+      leftRange: { from: 1, to: 1 },
+      rightRange: { from: 1, to: 2 },
+    });
+  });
+
+  it("keeps ignored blank lines inside original hunk ranges", () => {
+    const result = computeDiff("head\nold-a\n\nold-b\ntail", "head\nnew\ntail", {
+      ...DEFAULT_COMPARE_OPTIONS,
+      ignoreBlankLines: true,
+    });
+
+    expect(result.hunks[0]).toMatchObject({
+      leftRange: { from: 1, to: 4 },
+      rightRange: { from: 1, to: 2 },
+    });
   });
 
   it("normalizes CRLF and CR line endings", () => {

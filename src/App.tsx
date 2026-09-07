@@ -16,6 +16,8 @@ import { ResultToolbar } from "./components/ResultToolbar";
 import { ToolSidebar } from "./components/ToolSidebar";
 import { createUnifiedPatch, validateText } from "./core/diffEngine";
 import { DiffWorkerClient } from "./core/diffWorkerClient";
+import { applyHunkMerge } from "./core/hunkMerge";
+import { pushMergeUndo, type MergeUndoEntry } from "./core/mergeUndo";
 import {
   addHistoryEntry,
   createDefaultAppState,
@@ -29,7 +31,12 @@ import {
   type HistoryEntry,
   type StorageAdapter,
 } from "./core/storage";
-import type { CompareOptions, DiffResult, ThemeMode } from "./core/types";
+import type {
+  CompareOptions,
+  DiffResult,
+  MergeDirection,
+  ThemeMode,
+} from "./core/types";
 import type { ExtensionMessage } from "./extension/messages";
 import { consumePendingCompare } from "./extension/pendingCompare";
 
@@ -45,6 +52,12 @@ interface AppProps {
   diffClient?: DiffClient;
 }
 
+interface ComparisonNavigation {
+  activeHunkIndex?: number;
+  keepMergePanelOpen?: boolean;
+  allowEmpty?: boolean;
+}
+
 export function App({ initialState, storage: providedStorage, diffClient }: AppProps = {}) {
   const storage = useMemo(
     () => providedStorage ?? createDefaultStorageAdapter(),
@@ -57,6 +70,8 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
   const [result, setResult] = useState<DiffResult | null>(null);
   const [panel, setPanel] = useState<"tools" | "history">("tools");
   const [activeHunkIndex, setActiveHunkIndex] = useState(0);
+  const [mergePanelOpen, setMergePanelOpen] = useState(false);
+  const [mergeUndoStack, setMergeUndoStack] = useState<MergeUndoEntry[]>([]);
   const [isComparing, setIsComparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -64,6 +79,8 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
   const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < 960);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const initialPendingHandled = useRef(false);
+  const mergeInFlight = useRef(false);
+  const comparisonSequence = useRef(0);
 
   useEffect(() => {
     if (initialState) return;
@@ -113,7 +130,8 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
     if (!diffClient) client.dispose();
   }, [client, diffClient]);
 
-  const patchDraft = (patch: Partial<AppState["draft"]>) => {
+  const patchDraft = (patch: Partial<AppState["draft"]>, clearMergeUndo = false) => {
+    if (clearMergeUndo) setMergeUndoStack([]);
     setState((current) => ({
       ...current,
       draft: {
@@ -124,27 +142,44 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
     }));
   };
 
-  const runComparison = useCallback(async (draft = state.draft) => {
-    const validationError = getValidationError(draft.leftText, draft.rightText);
+  const runComparison = useCallback(async (
+    draft = state.draft,
+    navigation: ComparisonNavigation = {},
+  ): Promise<DiffResult | null> => {
+    const validationError = getValidationError(
+      draft.leftText,
+      draft.rightText,
+      navigation.allowEmpty,
+    );
     if (validationError) {
       setError(validationError);
-      return;
+      return null;
     }
 
     setError(null);
     setIsComparing(true);
+    const sequence = comparisonSequence.current + 1;
+    comparisonSequence.current = sequence;
     try {
       const nextResult = await client.compare(draft.leftText, draft.rightText, draft.options);
+      if (comparisonSequence.current !== sequence) return null;
+      const nextHunkIndex = nextResult.hunks.length
+        ? Math.min(navigation.activeHunkIndex ?? 0, nextResult.hunks.length - 1)
+        : 0;
       setResult(nextResult);
       setScreen("result");
-      setActiveHunkIndex(0);
+      setActiveHunkIndex(nextHunkIndex);
+      setMergePanelOpen(Boolean(navigation.keepMergePanelOpen && nextResult.hunks.length));
       setMobileSidebarOpen(false);
+      return nextResult;
     } catch (comparisonError) {
-      if (comparisonError instanceof Error && comparisonError.name === "AbortError") return;
+      if (comparisonError instanceof Error && comparisonError.name === "AbortError") return null;
+      if (comparisonSequence.current !== sequence) return null;
       setError(comparisonError instanceof Error ? comparisonError.message : "差异计算失败。");
       setScreen("input");
+      return null;
     } finally {
-      setIsComparing(false);
+      if (comparisonSequence.current === sequence) setIsComparing(false);
     }
   }, [client, state.draft]);
 
@@ -160,6 +195,8 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
       updatedAt: new Date().toISOString(),
     };
     setState((current) => ({ ...current, draft }));
+    setMergeUndoStack([]);
+    setMergePanelOpen(false);
     setScreen("input");
     if (pending.autoCompare) await runComparison(draft);
   }, [runComparison, state.draft]);
@@ -189,10 +226,16 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
       previous.ignoreCase !== options.ignoreCase ||
       previous.ignoreWhitespace !== options.ignoreWhitespace ||
       previous.ignoreBlankLines !== options.ignoreBlankLines;
-    if (result && requiresRecompare) void runComparison(draft);
+    if (result && requiresRecompare) {
+      void runComparison(draft, {
+        activeHunkIndex,
+        keepMergePanelOpen: mergePanelOpen,
+      });
+    }
   };
 
   const handleSwap = () => {
+    if (isComparing) return;
     const draft = {
       ...state.draft,
       leftText: state.draft.rightText,
@@ -201,6 +244,8 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
       rightName: state.draft.leftName,
       updatedAt: new Date().toISOString(),
     };
+    setMergeUndoStack([]);
+    setMergePanelOpen(false);
     setState((current) => ({ ...current, draft }));
     if (result) void runComparison(draft);
   };
@@ -212,11 +257,103 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
     );
   };
 
+  const handleMerge = async (direction: MergeDirection) => {
+    const hunk = result?.hunks[activeHunkIndex];
+    if (!hunk || isComparing || mergeInFlight.current) return;
+
+    let draft: AppState["draft"];
+    try {
+      draft = {
+        ...applyHunkMerge(state.draft, hunk, direction),
+        updatedAt: new Date().toISOString(),
+      };
+    } catch (mergeError) {
+      setNotice(mergeError instanceof Error ? mergeError.message : "当前差异无法合并。");
+      return;
+    }
+
+    const target = direction === "left-to-right" ? "right" : "left";
+    const targetText = target === "right" ? draft.rightText : draft.leftText;
+    const validation = validateText(targetText);
+    if (!validation.valid) {
+      setNotice(formatValidationError(target === "right" ? "更改后文本" : "原始文本", validation.reason));
+      return;
+    }
+
+    const previousText = target === "right" ? state.draft.rightText : state.draft.leftText;
+    if (targetText === previousText) {
+      setNotice("当前差异无需合并。");
+      return;
+    }
+
+    mergeInFlight.current = true;
+    setMergeUndoStack((current) => pushMergeUndo(current, {
+      target,
+      previousText,
+      hunkIndex: activeHunkIndex,
+    }));
+    setState((current) => ({ ...current, draft }));
+
+    try {
+      const nextResult = await runComparison(draft, {
+        activeHunkIndex,
+        keepMergePanelOpen: true,
+        allowEmpty: true,
+      });
+      if (nextResult) {
+        setNotice(nextResult.hunks.length
+          ? `已将当前差异合并到${target === "right" ? "右侧" : "左侧"}。`
+          : "合并完成，两侧文本已一致。");
+      }
+    } finally {
+      mergeInFlight.current = false;
+    }
+  };
+
+  const handleUndoMerge = async () => {
+    const entry = mergeUndoStack.at(-1);
+    if (!entry || isComparing || mergeInFlight.current) return;
+
+    mergeInFlight.current = true;
+    const draft = {
+      ...state.draft,
+      [entry.target === "left" ? "leftText" : "rightText"]: entry.previousText,
+      updatedAt: new Date().toISOString(),
+    };
+    setMergeUndoStack((current) => current.slice(0, -1));
+    setState((current) => ({ ...current, draft }));
+    setNotice("已撤销最近一次合并。");
+    try {
+      await runComparison(draft, {
+        activeHunkIndex: entry.hunkIndex,
+        keepMergePanelOpen: true,
+        allowEmpty: true,
+      });
+    } finally {
+      mergeInFlight.current = false;
+    }
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
         event.preventDefault();
         void runComparison();
+      }
+      if (
+        screen === "result" &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "z" &&
+        mergeUndoStack.length > 0 &&
+        !isEditableTarget(event.target)
+      ) {
+        event.preventDefault();
+        void handleUndoMerge();
+      }
+      if (event.key === "Escape" && mergePanelOpen) {
+        event.preventDefault();
+        setMergePanelOpen(false);
       }
       if (event.altKey && event.key === "ArrowDown") {
         event.preventDefault();
@@ -244,11 +381,11 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
     setError(null);
     patchDraft(side === "left"
       ? { leftText: text, leftName: file.name }
-      : { rightText: text, rightName: file.name });
+      : { rightText: text, rightName: file.name }, true);
   };
 
   const handleSave = () => {
-    if (!result) return;
+    if (!result || isComparing) return;
     const entry = createHistoryEntry({
       title: createComparisonTitle(state.draft.leftName, state.draft.rightName),
       leftName: state.draft.leftName,
@@ -277,6 +414,8 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
       updatedAt: new Date().toISOString(),
     };
     setState((current) => ({ ...current, draft }));
+    setMergeUndoStack([]);
+    setMergePanelOpen(false);
     setPanel("tools");
     void runComparison(draft);
   };
@@ -298,6 +437,7 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
   );
 
   const exportPatch = () => {
+    if (isComparing) return;
     const blob = new Blob([patch], { type: "text/x-diff;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -392,14 +532,14 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
             rightText={state.draft.rightText}
             leftName={state.draft.leftName}
             rightName={state.draft.rightName}
-            onLeftChange={(leftText) => patchDraft({ leftText })}
-            onRightChange={(rightText) => patchDraft({ rightText })}
+            onLeftChange={(leftText) => patchDraft({ leftText }, true)}
+            onRightChange={(rightText) => patchDraft({ rightText }, true)}
             onLeftNameChange={(leftName) => patchDraft({ leftName })}
             onRightNameChange={(rightName) => patchDraft({ rightName })}
             onCompare={() => void runComparison()}
             onSwap={handleSwap}
             onClear={() => {
-              patchDraft({ leftText: "", rightText: "" });
+              patchDraft({ leftText: "", rightText: "" }, true);
               setError(null);
             }}
             onFileLoad={(side, file) => void handleFileLoad(side, file)}
@@ -417,12 +557,25 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
               onCopyPatch={() => void copyText(patch, "补丁已复制。")}
               onSave={handleSave}
               onExport={exportPatch}
+              canUndo={mergeUndoStack.length > 0 && !isComparing}
+              onUndo={() => void handleUndoMerge()}
+              busy={isComparing}
             />
             <DiffViewer
               result={result}
               viewMode={state.draft.options.viewMode}
               wrapLines={state.draft.options.wrapLines}
               activeHunkIndex={activeHunkIndex}
+              mergePanelOpen={mergePanelOpen}
+              isComparing={isComparing}
+              onSelectHunk={(index) => {
+                setActiveHunkIndex(index);
+                setMergePanelOpen(true);
+              }}
+              onCloseMergePanel={() => setMergePanelOpen(false)}
+              onPreviousHunk={() => moveHunk(-1)}
+              onNextHunk={() => moveHunk(1)}
+              onMerge={(direction) => void handleMerge(direction)}
             />
           </section>
         )}
@@ -450,13 +603,26 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
   );
 }
 
-function getValidationError(leftText: string, rightText: string): string | null {
-  if (!leftText && !rightText) return "请至少输入一侧文本。";
+function getValidationError(
+  leftText: string,
+  rightText: string,
+  allowEmpty = false,
+): string | null {
+  if (!allowEmpty && !leftText && !rightText) return "请至少输入一侧文本。";
   const left = validateText(leftText);
   const right = validateText(rightText);
   if (!left.valid) return formatValidationError("原始文本", left.reason);
   if (!right.valid) return formatValidationError("更改后文本", right.reason);
   return null;
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && (
+    target.isContentEditable ||
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT"
+  );
 }
 
 function formatValidationError(label: string, reason?: "bytes" | "lines"): string {

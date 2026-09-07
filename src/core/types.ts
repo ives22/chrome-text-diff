@@ -32,13 +32,20 @@ export interface DiffRow {
   right?: DiffCell;
 }
 
+export interface LineRange {
+  from: number;
+  to: number;
+}
+
 export interface DiffHunk {
   id: string;
   rowStart: number;
   rowEnd: number;
-  leftStart?: number;
-  rightStart?: number;
+  leftRange: LineRange;
+  rightRange: LineRange;
 }
+
+export type MergeDirection = "left-to-right" | "right-to-left";
 
 export interface DiffStats {
   addedUnits: number;

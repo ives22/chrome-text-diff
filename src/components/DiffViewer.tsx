@@ -6,17 +6,26 @@ import type {
   DiffRow,
   DiffRowKind,
   DiffViewMode,
+  MergeDirection,
 } from "../core/types";
+import { HunkControlHeader, HunkMergeActions } from "./HunkMergeControls";
 
 interface DiffViewerProps {
   result: DiffResult;
   viewMode: DiffViewMode;
   wrapLines: boolean;
   activeHunkIndex: number;
+  mergePanelOpen: boolean;
+  isComparing: boolean;
+  onSelectHunk: (index: number) => void;
+  onCloseMergePanel: () => void;
+  onPreviousHunk: () => void;
+  onNextHunk: () => void;
+  onMerge: (direction: MergeDirection) => void;
 }
 
-type DisplayRow =
-  | { type: "split"; id: string; hunkId?: string; row: DiffRow }
+type ContentDisplayRow =
+  | { type: "split"; id: string; hunkId?: string; row: DiffRow; isHunkStart?: boolean; isHunkEnd?: boolean }
   | {
       type: "unified";
       id: string;
@@ -25,44 +34,76 @@ type DisplayRow =
       cell: DiffCell;
       leftLineNumber?: number;
       rightLineNumber?: number;
+      isHunkStart?: boolean;
+      isHunkEnd?: boolean;
     };
 
-export function DiffViewer({ result, viewMode, wrapLines, activeHunkIndex }: DiffViewerProps) {
+type DisplayRow = ContentDisplayRow | {
+  type: "hunk-header";
+  id: string;
+  hunkId: string;
+} | {
+  type: "hunk-actions";
+  id: string;
+  hunkId: string;
+};
+
+export function DiffViewer({
+  result,
+  viewMode,
+  wrapLines,
+  activeHunkIndex,
+  mergePanelOpen,
+  isComparing,
+  onSelectHunk,
+  onCloseMergePanel,
+  onPreviousHunk,
+  onNextHunk,
+  onMerge,
+}: DiffViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const displayRows = useMemo(() => buildDisplayRows(result.rows, viewMode), [result.rows, viewMode]);
   const activeHunkId = result.hunks[activeHunkIndex]?.id;
+  const displayRows = useMemo(
+    () => buildDisplayRows(result.rows, viewMode, mergePanelOpen ? activeHunkId : undefined),
+    [activeHunkId, mergePanelOpen, result.rows, viewMode],
+  );
+  const hunkIndexById = useMemo(
+    () => new Map(result.hunks.map((hunk, index) => [hunk.id, index])),
+    [result.hunks],
+  );
   const virtualizer = useVirtualizer({
     count: displayRows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => (wrapLines ? 34 : 30),
+    estimateSize: (index) => estimateDisplayRowSize(displayRows[index], wrapLines),
+    getItemKey: (index) => displayRows[index]?.id ?? index,
     overscan: 18,
     initialRect: { width: 1200, height: 600 },
   });
   const virtualRows = virtualizer.getVirtualItems();
-  const estimatedRowSize = wrapLines ? 34 : 30;
+  const fallbackRows = virtualRows.length === 0 && displayRows.length <= 200
+    ? buildFallbackVirtualRows(displayRows, wrapLines)
+    : [];
   const rowsToRender =
     virtualRows.length > 0
       ? virtualRows
-      : displayRows.length <= 200
-        ? displayRows.map((_, index) => ({
-            index,
-            key: index,
-            start: index * estimatedRowSize,
-            size: estimatedRowSize,
-            end: (index + 1) * estimatedRowSize,
-            lane: 0,
-          }))
-        : [];
+      : fallbackRows;
   const canvasHeight = Math.max(
     virtualizer.getTotalSize(),
-    displayRows.length * estimatedRowSize,
+    estimateCanvasHeight(displayRows, wrapLines),
   );
 
   useEffect(() => {
     if (!activeHunkId) return;
-    const index = displayRows.findIndex((row) => row.hunkId === activeHunkId);
+    const preferredType = mergePanelOpen ? "hunk-header" : undefined;
+    const index = displayRows.findIndex((row) =>
+      row.hunkId === activeHunkId && (!preferredType || row.type === preferredType),
+    );
     if (index >= 0) virtualizer.scrollToIndex(index, { align: "center" });
-  }, [activeHunkId, displayRows, virtualizer]);
+  }, [activeHunkId, displayRows, mergePanelOpen, virtualizer]);
+
+  useEffect(() => {
+    virtualizer.measure();
+  }, [displayRows, virtualizer, viewMode, wrapLines]);
 
   return (
     <section className="diff-viewer" aria-label="差异结果">
@@ -94,13 +135,68 @@ export function DiffViewer({ result, viewMode, wrapLines, activeHunkIndex }: Dif
             const style: CSSProperties = {
               transform: `translateY(${virtualRow.start}px)`,
             };
+            if (item.type === "hunk-header") {
+              return (
+                <div
+                  key={item.id}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  className="virtual-row hunk-control-row hunk-control-top"
+                  style={style}
+                >
+                  <HunkControlHeader
+                    current={activeHunkIndex + 1}
+                    total={result.hunks.length}
+                    onPrevious={onPreviousHunk}
+                    onNext={onNextHunk}
+                    onClose={onCloseMergePanel}
+                  />
+                </div>
+              );
+            }
+            if (item.type === "hunk-actions") {
+              return (
+                <div
+                  key={item.id}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualRow.index}
+                  className="virtual-row hunk-control-row hunk-control-bottom"
+                  style={style}
+                >
+                  <HunkMergeActions
+                    viewMode={viewMode}
+                    disabled={isComparing}
+                    onMerge={onMerge}
+                  />
+                </div>
+              );
+            }
+
+            const hunkIndex = item.hunkId ? hunkIndexById.get(item.hunkId) : undefined;
+            const isActiveHunk = item.hunkId === activeHunkId;
+            const isSelectedHunk = isActiveHunk && mergePanelOpen;
+            const selectHunk = () => {
+              if (hunkIndex !== undefined) onSelectHunk(hunkIndex);
+            };
             return (
               <div
                 key={item.id}
                 ref={virtualizer.measureElement}
                 data-index={virtualRow.index}
-                className={`virtual-row ${item.hunkId === activeHunkId ? "active-hunk" : ""}`}
+                className={`virtual-row ${isActiveHunk ? "active-hunk" : ""} ${isSelectedHunk ? "selected-hunk" : ""} ${item.isHunkStart ? "hunk-start" : ""} ${item.isHunkEnd ? "hunk-end" : ""}`}
                 style={style}
+                role={item.isHunkStart ? "button" : undefined}
+                tabIndex={item.isHunkStart ? 0 : undefined}
+                aria-label={item.isHunkStart && hunkIndex !== undefined
+                  ? `选择第 ${hunkIndex + 1} 处差异进行合并`
+                  : undefined}
+                onClick={item.hunkId ? selectHunk : undefined}
+                onKeyDown={item.isHunkStart ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    selectHunk();
+                  }
+                } : undefined}
               >
                 {item.type === "split" ? (
                   <SplitRow row={item.row} />
@@ -150,7 +246,7 @@ function SplitRow({ row }: { row: DiffRow }) {
   );
 }
 
-function UnifiedRow({ row }: { row: Extract<DisplayRow, { type: "unified" }> }) {
+function UnifiedRow({ row }: { row: Extract<ContentDisplayRow, { type: "unified" }> }) {
   const marker = row.kind === "add" ? "+" : row.kind === "remove" ? "−" : "";
   const label =
     row.kind === "add"
@@ -211,12 +307,51 @@ function Segments({ cell }: { cell: DiffCell }) {
   ));
 }
 
-function buildDisplayRows(rows: DiffRow[], viewMode: DiffViewMode): DisplayRow[] {
+function buildDisplayRows(
+  rows: DiffRow[],
+  viewMode: DiffViewMode,
+  expandedHunkId?: string,
+): DisplayRow[] {
+  const contentRows = buildContentRows(rows, viewMode);
+  const bounds = new Map<string, { first: number; last: number }>();
+  contentRows.forEach((row, index) => {
+    if (!row.hunkId) return;
+    const current = bounds.get(row.hunkId);
+    bounds.set(row.hunkId, { first: current?.first ?? index, last: index });
+  });
+
+  return contentRows.flatMap<DisplayRow>((row, index) => {
+    if (!row.hunkId) return [row];
+    const bound = bounds.get(row.hunkId);
+    const content = {
+      ...row,
+      isHunkStart: bound?.first === index,
+      isHunkEnd: bound?.last === index,
+    };
+    if (row.hunkId !== expandedHunkId) return [content];
+
+    return [
+      ...(bound?.first === index ? [{
+        type: "hunk-header" as const,
+        id: `${row.hunkId}-controls-header`,
+        hunkId: row.hunkId,
+      }] : []),
+      content,
+      ...(bound?.last === index ? [{
+        type: "hunk-actions" as const,
+        id: `${row.hunkId}-controls-actions`,
+        hunkId: row.hunkId,
+      }] : []),
+    ];
+  });
+}
+
+function buildContentRows(rows: DiffRow[], viewMode: DiffViewMode): ContentDisplayRow[] {
   if (viewMode === "split") {
     return rows.map((row) => ({ type: "split", id: row.id, hunkId: row.hunkId, row }));
   }
 
-  return rows.flatMap<DisplayRow>((row) => {
+  return rows.flatMap<ContentDisplayRow>((row) => {
     if (row.kind === "change") {
       return [
         ...(row.left
@@ -254,4 +389,30 @@ function buildDisplayRows(rows: DiffRow[], viewMode: DiffViewMode): DisplayRow[]
       rightLineNumber: row.right?.lineNumber,
     }];
   });
+}
+
+function estimateDisplayRowSize(row: DisplayRow | undefined, wrapLines: boolean): number {
+  if (row?.type === "hunk-header") return 40;
+  if (row?.type === "hunk-actions") return 46;
+  return wrapLines ? 34 : 30;
+}
+
+function buildFallbackVirtualRows(rows: DisplayRow[], wrapLines: boolean) {
+  let start = 0;
+  return rows.map((row, index) => {
+    const size = estimateDisplayRowSize(row, wrapLines);
+    const item = { index, key: row.id, start, size, end: start + size, lane: 0 };
+    start += size;
+    return item;
+  });
+}
+
+function estimateCanvasHeight(rows: DisplayRow[], wrapLines: boolean): number {
+  const contentSize = wrapLines ? 34 : 30;
+  const controlAdjustment = rows.reduce((total, row) => {
+    if (row.type === "hunk-header") return total + 40 - contentSize;
+    if (row.type === "hunk-actions") return total + 46 - contentSize;
+    return total;
+  }, 0);
+  return rows.length * contentSize + controlAdjustment;
 }

@@ -892,6 +892,147 @@ input:focus-visible,
   box-shadow: inset 3px 0 var(--accent);
 }
 
+.virtual-row[role="button"] {
+  cursor: pointer;
+}
+
+.virtual-row[role="button"]:focus-visible {
+  z-index: 2;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.virtual-row.selected-hunk {
+  box-shadow: inset 1px 0 var(--accent), inset -1px 0 var(--accent);
+}
+
+.virtual-row.selected-hunk.hunk-start {
+  border-top: 1px solid var(--accent);
+}
+
+.virtual-row.selected-hunk.hunk-end {
+  border-bottom: 1px solid var(--accent);
+}
+
+.hunk-control-row {
+  z-index: 3;
+  border-right: 1px solid var(--accent);
+  border-left: 1px solid var(--accent);
+  background: var(--surface);
+}
+
+.hunk-control-top {
+  border-top: 1px solid var(--accent);
+}
+
+.hunk-control-bottom {
+  border-bottom: 1px solid var(--accent);
+}
+
+.hunk-control-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 4px 8px 4px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--accent-soft) 34%, var(--surface));
+}
+
+.hunk-position,
+.hunk-control-buttons {
+  display: flex;
+  align-items: center;
+}
+
+.hunk-position {
+  gap: 8px;
+  color: var(--text-muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+}
+
+.hunk-position strong {
+  color: var(--text);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 12px;
+}
+
+.hunk-control-buttons {
+  gap: 4px;
+}
+
+.hunk-control-buttons .icon-button {
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
+}
+
+.hunk-merge-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 46px;
+  background: var(--surface-muted);
+}
+
+.hunk-merge-side {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+}
+
+.hunk-merge-side:first-child {
+  justify-content: flex-end;
+  border-right: 1px solid var(--border);
+}
+
+.hunk-merge-side:last-child {
+  justify-content: flex-start;
+}
+
+.merge-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.merge-button-right {
+  background: var(--remove-bg);
+  color: var(--remove-text);
+}
+
+.merge-button-left {
+  background: var(--add-bg);
+  color: var(--add-text);
+}
+
+.merge-button:hover:not(:disabled) {
+  filter: saturate(1.12);
+  box-shadow: 0 1px 2px rgba(23, 33, 29, 0.1);
+}
+
+.merge-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.merge-label-long,
+.hunk-merge-unified .merge-label-short {
+  display: none;
+}
+
+.hunk-merge-unified .merge-label-long {
+  display: inline;
+}
+
 .split-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1307,6 +1448,14 @@ input:focus-visible,
   .stat-detail {
     display: none;
   }
+
+  .merge-label-short {
+    display: none;
+  }
+
+  .merge-label-long {
+    display: inline;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1345,6 +1494,7 @@ input:focus-visible,
   .split-row .diff-cell:first-child {
     border-right: 0;
   }
+
 }
 
 @media (prefers-reduced-motion: reduce) {

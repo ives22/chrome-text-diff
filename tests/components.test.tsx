@@ -31,7 +31,13 @@ const result: DiffResult = {
     unchangedLines: 1,
     hunks: 1,
   },
-  hunks: [{ id: "hunk-1", rowStart: 1, rowEnd: 1, leftStart: 2, rightStart: 2 }],
+  hunks: [{
+    id: "hunk-1",
+    rowStart: 1,
+    rowEnd: 1,
+    leftRange: { from: 1, to: 2 },
+    rightRange: { from: 1, to: 2 },
+  }],
   rows: [
     {
       id: "row-1",
@@ -61,6 +67,16 @@ const result: DiffResult = {
       },
     },
   ],
+};
+
+const viewerActions = {
+  mergePanelOpen: false,
+  isComparing: false,
+  onSelectHunk: vi.fn(),
+  onCloseMergePanel: vi.fn(),
+  onPreviousHunk: vi.fn(),
+  onNextHunk: vi.fn(),
+  onMerge: vi.fn(),
 };
 
 describe("InputWorkspace", () => {
@@ -110,6 +126,7 @@ describe("DiffViewer", () => {
         viewMode="split"
         wrapLines
         activeHunkIndex={0}
+        {...viewerActions}
       />,
     );
 
@@ -128,6 +145,7 @@ describe("DiffViewer", () => {
         viewMode="unified"
         wrapLines={false}
         activeHunkIndex={0}
+        {...viewerActions}
       />,
     );
 
@@ -145,7 +163,13 @@ describe("DiffViewer", () => {
         unchangedLines: 0,
         hunks: 1,
       },
-      hunks: [{ id: "hunk-1", rowStart: 0, rowEnd: 0, rightStart: 1 }],
+      hunks: [{
+        id: "hunk-1",
+        rowStart: 0,
+        rowEnd: 0,
+        leftRange: { from: 0, to: 0 },
+        rightRange: { from: 0, to: 1 },
+      }],
       rows: [{
         id: "row-1",
         hunkId: "hunk-1",
@@ -160,6 +184,7 @@ describe("DiffViewer", () => {
         viewMode="split"
         wrapLines
         activeHunkIndex={0}
+        {...viewerActions}
       />,
     );
 
@@ -184,6 +209,7 @@ describe("DiffViewer", () => {
         viewMode="split"
         wrapLines
         activeHunkIndex={0}
+        {...viewerActions}
       />,
     );
 
@@ -194,6 +220,86 @@ describe("DiffViewer", () => {
     expect(screen.getByText("74 行未变")).toBeInTheDocument();
     expect(screen.getByTitle("57 个删除差异单元，影响 50 行")).toBeInTheDocument();
     expect(screen.getByTitle("67 个新增差异单元，影响 61 行")).toBeInTheDocument();
+  });
+
+  it("opens inline controls from a changed row and merges in either direction", async () => {
+    const user = userEvent.setup();
+    const onMerge = vi.fn();
+
+    function Harness({ viewMode = "split" }: { viewMode?: "split" | "unified" }) {
+      const [mergePanelOpen, setMergePanelOpen] = useState(false);
+      return (
+        <DiffViewer
+          result={result}
+          viewMode={viewMode}
+          wrapLines
+          activeHunkIndex={0}
+          mergePanelOpen={mergePanelOpen}
+          isComparing={false}
+          onSelectHunk={() => setMergePanelOpen(true)}
+          onCloseMergePanel={() => setMergePanelOpen(false)}
+          onPreviousHunk={vi.fn()}
+          onNextHunk={vi.fn()}
+          onMerge={onMerge}
+        />
+      );
+    }
+
+    render(<Harness />);
+    expect(screen.queryByRole("group", { name: "当前差异操作" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByText("eta"));
+    expect(screen.getByRole("group", { name: "当前差异操作" })).toHaveTextContent("更改 1 / 1");
+    await user.click(screen.getByRole("button", { name: "合并到右侧" }));
+    await user.click(screen.getByRole("button", { name: "合并到左侧" }));
+    expect(onMerge).toHaveBeenNthCalledWith(1, "left-to-right");
+    expect(onMerge).toHaveBeenNthCalledWith(2, "right-to-left");
+
+    await user.click(screen.getByRole("button", { name: "关闭合并操作" }));
+    expect(screen.queryByRole("group", { name: "当前差异操作" })).not.toBeInTheDocument();
+  });
+
+  it("supports keyboard selection and explicit unified merge labels", async () => {
+    const user = userEvent.setup();
+    const onSelectHunk = vi.fn();
+    const { rerender } = render(
+      <DiffViewer
+        result={result}
+        viewMode="unified"
+        wrapLines
+        activeHunkIndex={0}
+        mergePanelOpen={false}
+        isComparing={false}
+        onSelectHunk={onSelectHunk}
+        onCloseMergePanel={vi.fn()}
+        onPreviousHunk={vi.fn()}
+        onNextHunk={vi.fn()}
+        onMerge={vi.fn()}
+      />,
+    );
+
+    const hunkButton = screen.getByRole("button", { name: "选择第 1 处差异进行合并" });
+    hunkButton.focus();
+    await user.keyboard("{Enter}");
+    expect(onSelectHunk).toHaveBeenCalledWith(0);
+
+    rerender(
+      <DiffViewer
+        result={result}
+        viewMode="unified"
+        wrapLines
+        activeHunkIndex={0}
+        mergePanelOpen
+        isComparing={false}
+        onSelectHunk={onSelectHunk}
+        onCloseMergePanel={vi.fn()}
+        onPreviousHunk={vi.fn()}
+        onNextHunk={vi.fn()}
+        onMerge={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "用左侧替换右侧" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "用右侧替换左侧" })).toBeInTheDocument();
   });
 });
 

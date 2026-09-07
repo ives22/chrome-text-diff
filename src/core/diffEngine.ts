@@ -52,6 +52,8 @@ export function computeDiff(
 ): DiffResult {
   const left = createLineRecords(leftText, options);
   const right = createLineRecords(rightText, options);
+  const leftLineCount = countLogicalLines(leftText);
+  const rightLineCount = countLogicalLines(rightText);
   const changes = diffArrays(
     left.map((line) => line.key),
     right.map((line) => line.key),
@@ -139,8 +141,8 @@ export function computeDiff(
       id: hunkId,
       rowStart,
       rowEnd: rows.length - 1,
-      leftStart: removed[0]?.lineNumber,
-      rightStart: added[0]?.lineNumber,
+      leftRange: createHunkRange(removed, left[leftCursor], leftLineCount),
+      rightRange: createHunkRange(added, right[rightCursor], rightLineCount),
     });
   }
 
@@ -156,6 +158,25 @@ export function computeDiff(
       hunks: hunks.length,
     },
   };
+}
+
+function countLogicalLines(text: string): number {
+  return text === "" ? 0 : normalizeLineEndings(text).split("\n").length;
+}
+
+function createHunkRange(
+  changedLines: LineRecord[],
+  nextRetainedLine: LineRecord | undefined,
+  lineCount: number,
+) {
+  const first = changedLines[0];
+  const last = changedLines.at(-1);
+  if (first && last) {
+    return { from: first.lineNumber - 1, to: last.lineNumber };
+  }
+
+  const insertionPoint = nextRetainedLine ? nextRetainedLine.lineNumber - 1 : lineCount;
+  return { from: insertionPoint, to: insertionPoint };
 }
 
 export function createUnifiedPatch(
