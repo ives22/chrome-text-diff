@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DiffViewer } from "../src/components/DiffViewer";
@@ -185,9 +185,12 @@ describe("DiffViewer", () => {
         wrapLines
         activeHunkIndex={0}
         {...viewerActions}
+        mergePanelOpen
       />,
     );
 
+    const panel = screen.getByRole("group", { name: "当前差异操作" });
+    expect(panel).toContainElement(screen.getByLabelText("左侧空白占位"));
     expect(screen.getByLabelText("左侧空白占位")).toHaveTextContent("");
     expect(screen.getByLabelText("右侧新增第 1 行")).toHaveTextContent("+new line");
   });
@@ -225,6 +228,8 @@ describe("DiffViewer", () => {
   it("opens inline controls from a changed row and merges in either direction", async () => {
     const user = userEvent.setup();
     const onMerge = vi.fn();
+    const onPreviousHunk = vi.fn();
+    const onNextHunk = vi.fn();
 
     function Harness({ viewMode = "split" }: { viewMode?: "split" | "unified" }) {
       const [mergePanelOpen, setMergePanelOpen] = useState(false);
@@ -238,8 +243,8 @@ describe("DiffViewer", () => {
           isComparing={false}
           onSelectHunk={() => setMergePanelOpen(true)}
           onCloseMergePanel={() => setMergePanelOpen(false)}
-          onPreviousHunk={vi.fn()}
-          onNextHunk={vi.fn()}
+          onPreviousHunk={onPreviousHunk}
+          onNextHunk={onNextHunk}
           onMerge={onMerge}
         />
       );
@@ -249,13 +254,41 @@ describe("DiffViewer", () => {
     expect(screen.queryByRole("group", { name: "当前差异操作" })).not.toBeInTheDocument();
 
     await user.click(screen.getByText("eta"));
-    expect(screen.getByRole("group", { name: "当前差异操作" })).toHaveTextContent("更改 1 / 1");
-    await user.click(screen.getByRole("button", { name: "合并到右侧" }));
-    await user.click(screen.getByRole("button", { name: "合并到左侧" }));
+    const panel = screen.getByRole("group", { name: "当前差异操作" });
+    expect(panel).toHaveClass("hunk-merge-panel");
+    expect(panel).toHaveTextContent("更改 1 / 1");
+    expect(panel).toContainElement(screen.getByText("eta"));
+    expect(panel).toContainElement(screen.getByText("ravo"));
+    expect(document.querySelectorAll(".hunk-merge-panel")).toHaveLength(1);
+
+    const header = panel.querySelector(".hunk-panel-header");
+    const footer = panel.querySelector(".hunk-panel-footer");
+    expect(header).not.toBeNull();
+    expect(footer).not.toBeNull();
+    expect(within(header as HTMLElement).getByRole("button", { name: "上一个差异" }))
+      .toHaveTextContent("上一处");
+    expect(within(header as HTMLElement).getByRole("button", { name: "下一个差异" }))
+      .toHaveTextContent("下一处");
+    expect(within(header as HTMLElement).queryByRole("button", { name: "关闭合并操作" }))
+      .not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "上一个差异" }));
+    await user.click(screen.getByRole("button", { name: "下一个差异" }));
+    expect(onPreviousHunk).toHaveBeenCalledOnce();
+    expect(onNextHunk).toHaveBeenCalledOnce();
+
+    const footerButtons = within(footer as HTMLElement).getAllByRole("button");
+    expect(footerButtons.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "合并到右侧",
+      "关闭合并操作",
+      "合并到左侧",
+    ]);
+    await user.click(footerButtons[0]!);
+    await user.click(footerButtons[2]!);
     expect(onMerge).toHaveBeenNthCalledWith(1, "left-to-right");
     expect(onMerge).toHaveBeenNthCalledWith(2, "right-to-left");
 
-    await user.click(screen.getByRole("button", { name: "关闭合并操作" }));
+    await user.click(footerButtons[1]!);
     expect(screen.queryByRole("group", { name: "当前差异操作" })).not.toBeInTheDocument();
   });
 
@@ -298,8 +331,33 @@ describe("DiffViewer", () => {
         onMerge={vi.fn()}
       />,
     );
+    const unifiedPanel = screen.getByRole("group", { name: "当前差异操作" });
+    expect(unifiedPanel.querySelectorAll(".hunk-panel-content-row")).toHaveLength(2);
     expect(screen.getByRole("button", { name: "用左侧替换右侧" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "用右侧替换左侧" })).toBeInTheDocument();
+  });
+
+  it("reserves stacked split-row height on compact screens", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 375 });
+    const { container } = render(
+      <DiffViewer
+        result={result}
+        viewMode="split"
+        wrapLines
+        activeHunkIndex={0}
+        mergePanelOpen
+        isComparing={false}
+        onSelectHunk={vi.fn()}
+        onCloseMergePanel={vi.fn()}
+        onPreviousHunk={vi.fn()}
+        onNextHunk={vi.fn()}
+        onMerge={vi.fn()}
+      />,
+    );
+
+    const canvas = container.querySelector(".virtual-canvas") as HTMLElement;
+    expect(Number.parseFloat(canvas.style.height)).toBeGreaterThanOrEqual(206);
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
   });
 });
 

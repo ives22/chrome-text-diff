@@ -902,52 +902,44 @@ input:focus-visible,
   outline-offset: -2px;
 }
 
-.virtual-row.selected-hunk {
-  box-shadow: inset 1px 0 var(--accent), inset -1px 0 var(--accent);
-}
-
-.virtual-row.selected-hunk.hunk-start {
-  border-top: 1px solid var(--accent);
-}
-
-.virtual-row.selected-hunk.hunk-end {
-  border-bottom: 1px solid var(--accent);
-}
-
-.hunk-control-row {
+.selected-hunk-item {
   z-index: 3;
-  border-right: 1px solid var(--accent);
-  border-left: 1px solid var(--accent);
+  padding: 3px 0;
+}
+
+.hunk-merge-panel {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 68%, var(--border-strong));
+  border-radius: 6px;
   background: var(--surface);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--text) 10%, transparent);
 }
 
-.hunk-control-top {
-  border-top: 1px solid var(--accent);
-}
-
-.hunk-control-bottom {
-  border-bottom: 1px solid var(--accent);
-}
-
-.hunk-control-header {
+.hunk-panel-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
-  min-height: 40px;
-  padding: 4px 8px 4px 12px;
+  min-height: 44px;
+  padding: 6px 10px 6px 12px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--accent-soft) 34%, var(--surface));
+  background: color-mix(in srgb, var(--accent-soft) 26%, var(--surface));
 }
 
 .hunk-position,
-.hunk-control-buttons {
+.hunk-navigation,
+.hunk-nav-button {
   display: flex;
   align-items: center;
 }
 
 .hunk-position {
+  flex: 0 0 auto;
   gap: 8px;
+  min-height: 26px;
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
   color: var(--text-muted);
   font-family: "IBM Plex Mono", monospace;
   font-size: 11px;
@@ -959,36 +951,96 @@ input:focus-visible,
   font-size: 12px;
 }
 
-.hunk-control-buttons {
+.hunk-navigation {
   gap: 4px;
 }
 
-.hunk-control-buttons .icon-button {
-  width: 28px;
+.hunk-nav-button {
+  justify-content: center;
+  gap: 5px;
+  min-width: 68px;
   height: 28px;
-  flex-basis: 28px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
-.hunk-merge-actions {
+.hunk-nav-button:hover {
+  border-color: var(--border);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.hunk-panel-body {
+  background: var(--surface);
+}
+
+.hunk-panel-content-row:last-child .diff-cell,
+.hunk-panel-content-row:last-child .unified-row {
+  border-bottom: 0;
+}
+
+.hunk-panel-footer {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  min-height: 46px;
-  background: var(--surface-muted);
+  grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+  min-height: 52px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface));
 }
 
 .hunk-merge-side {
   display: flex;
   align-items: center;
-  padding: 6px 10px;
+  min-width: 0;
+  padding: 8px 10px;
 }
 
 .hunk-merge-side:first-child {
   justify-content: flex-end;
-  border-right: 1px solid var(--border);
 }
 
 .hunk-merge-side:last-child {
   justify-content: flex-start;
+}
+
+.hunk-close-slot {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.hunk-close-slot::before {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 50%;
+  width: 1px;
+  content: "";
+  background: var(--border);
+}
+
+.hunk-close-button.icon-button {
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  flex-basis: 32px;
+  border-color: var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 12%, transparent);
+  color: var(--text-muted);
+}
+
+.hunk-close-button.icon-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .merge-button {
@@ -996,27 +1048,37 @@ input:focus-visible,
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 30px;
-  padding: 0 10px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 12px;
   border: 1px solid currentColor;
-  border-radius: 4px;
+  border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 
 .merge-button-right {
-  background: var(--remove-bg);
+  border-color: color-mix(in srgb, var(--remove-text) 45%, var(--border));
+  background: color-mix(in srgb, var(--remove-bg) 78%, var(--surface));
   color: var(--remove-text);
 }
 
 .merge-button-left {
-  background: var(--add-bg);
+  border-color: color-mix(in srgb, var(--add-text) 45%, var(--border));
+  background: color-mix(in srgb, var(--add-bg) 78%, var(--surface));
   color: var(--add-text);
 }
 
 .merge-button:hover:not(:disabled) {
-  filter: saturate(1.12);
-  box-shadow: 0 1px 2px rgba(23, 33, 29, 0.1);
+  box-shadow: 0 3px 8px color-mix(in srgb, currentColor 16%, transparent);
+  transform: translateY(-1px);
+}
+
+.merge-button:active:not(:disabled) {
+  box-shadow: none;
+  transform: translateY(0);
 }
 
 .merge-button:disabled {

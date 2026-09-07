@@ -22,7 +22,7 @@ describe("extension manifest", () => {
   });
 
   it("keeps the extension and package versions aligned", () => {
-    expect(manifest.version).toBe("0.2.0");
+    expect(manifest.version).toBe("0.2.1");
     expect(manifest.version).toBe(packageJson.version);
   });
 });
