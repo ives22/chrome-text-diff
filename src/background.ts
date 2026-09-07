@@ -1,8 +1,8 @@
 import {
   WORKBENCH_TAB_KEY,
   handleContextMenuClick,
+  handleExtensionInstalled,
   handleRuntimeMessage,
-  initializeContextMenus,
   openOrFocusWorkbench,
   type ChromeBackgroundApi,
 } from "./extension/backgroundService";
@@ -10,8 +10,8 @@ import type { ExtensionMessage } from "./extension/messages";
 
 const api = chrome as unknown as ChromeBackgroundApi;
 
-chrome.runtime.onInstalled.addListener(() => {
-  void initializeContextMenus(api);
+chrome.runtime.onInstalled.addListener((details) => {
+  void handleExtensionInstalled(details.reason, api);
 });
 
 chrome.action.onClicked.addListener(() => {

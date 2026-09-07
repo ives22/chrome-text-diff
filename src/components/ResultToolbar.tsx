@@ -5,6 +5,7 @@ import {
   Copy,
   Download,
   Save,
+  Sparkles,
   Undo2,
 } from "lucide-react";
 import { IconButton } from "./IconButton";
@@ -21,6 +22,8 @@ interface ResultToolbarProps {
   canUndo: boolean;
   onUndo: () => void;
   busy: boolean;
+  aiBusy: boolean;
+  onAiAnalyze: () => void;
 }
 
 export function ResultToolbar(props: ResultToolbarProps) {
@@ -47,6 +50,15 @@ export function ResultToolbar(props: ResultToolbarProps) {
         </button>
         <button type="button" className="button button-quiet" disabled={props.busy} onClick={props.onExport}>
           <Download size={16} aria-hidden="true" />导出
+        </button>
+        <button
+          type="button"
+          className="button button-ai"
+          aria-label="AI 分析本次比较"
+          disabled={props.busy || props.aiBusy}
+          onClick={props.onAiAnalyze}
+        >
+          <Sparkles size={16} aria-hidden="true" />AI 分析
         </button>
         <button type="button" className="button button-primary" aria-label="保存比较" disabled={props.busy} onClick={props.onSave}>
           <Save size={16} aria-hidden="true" />保存

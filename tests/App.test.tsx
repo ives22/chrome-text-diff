@@ -5,6 +5,13 @@ import { App } from "../src/App";
 import { computeDiff } from "../src/core/diffEngine";
 import { createDefaultAppState, type StorageAdapter } from "../src/core/storage";
 import type { DiffResult } from "../src/core/types";
+import {
+  createDefaultAiSettings,
+  saveModelProfile,
+  type AiStorageAdapter,
+  type StorageArea,
+} from "../src/ai/aiStorage";
+import type { ModelProfile } from "../src/ai/types";
 
 vi.mock("@uiw/react-codemirror", () => ({
   default: ({ value, onChange, "aria-label": ariaLabel }: {
@@ -51,6 +58,17 @@ class MemoryStorage implements StorageAdapter {
   data: Record<string, unknown> = {};
   async get(key: string) { return { [key]: this.data[key] }; }
   async set(items: Record<string, unknown>) { Object.assign(this.data, items); }
+}
+
+class AiMemoryArea implements StorageArea {
+  data: Record<string, unknown> = {};
+  async get(key: string) { return { [key]: this.data[key] }; }
+  async set(items: Record<string, unknown>) { Object.assign(this.data, items); }
+  async remove(key: string) { delete this.data[key]; }
+}
+
+function createAiStorage(): AiStorageAdapter {
+  return { local: new AiMemoryArea(), session: new AiMemoryArea() };
 }
 
 describe("App", () => {
@@ -251,5 +269,132 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "编辑输入" }));
     expect(screen.getByLabelText("更改后文本内容")).toHaveValue(rightText);
+  });
+
+  it("analyzes a full comparison, confirms first transmission, and applies a previewed suggestion", async () => {
+    const user = userEvent.setup();
+    const initialState = createDefaultAppState();
+    initialState.draft = { ...initialState.draft, leftText: "old", rightText: "new" };
+    const profile: ModelProfile = {
+      id: "profile-1",
+      name: "测试模型",
+      provider: "custom",
+      baseUrl: "https://models.example.com/v1",
+      model: "test-chat",
+      rememberApiKey: false,
+    };
+    const aiStorage = createAiStorage();
+    const initialAiSettings = await saveModelProfile(
+      createDefaultAiSettings(),
+      profile,
+      "sk-test",
+      aiStorage,
+    );
+    const diffClient = {
+      compare: vi.fn(async (leftText, rightText, options) => computeDiff(leftText, rightText, options)),
+      cancel: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const aiClient = {
+      testConnection: vi.fn(),
+      complete: vi.fn().mockResolvedValue(JSON.stringify({
+        summary: "值发生变化。",
+        risks: ["确认业务语义"],
+        suggestions: [{
+          hunkId: "hunk-1",
+          explanation: "建议统一为 resolved。",
+          replacementText: "resolved",
+          recommendedTarget: "right",
+        }],
+      })),
+    };
+
+    render(
+      <App
+        initialState={initialState}
+        storage={new MemoryStorage()}
+        diffClient={diffClient}
+        initialAiSettings={initialAiSettings}
+        aiStorage={aiStorage}
+        aiClient={aiClient}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "查找差异" }));
+    await user.click(await screen.findByRole("button", { name: "AI 分析本次比较" }));
+    expect(screen.getByRole("dialog", { name: "发送至模型服务？" })).toHaveTextContent("左右完整文本");
+    await user.click(screen.getByRole("button", { name: "确认发送" }));
+
+    expect(await screen.findByText("值发生变化。")).toBeInTheDocument();
+    expect(aiClient.complete).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "预览 hunk-1 的建议" }));
+    expect(screen.getByRole("dialog", { name: "预览 AI 修改建议" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "确认应用到右侧" }));
+
+    await waitFor(() => expect(diffClient.compare).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("button", { name: "撤销最近一次合并" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "编辑输入" }));
+    expect(screen.getByLabelText("原始文本内容")).toHaveValue("old");
+    expect(screen.getByLabelText("更改后文本内容")).toHaveValue("resolved");
+  });
+
+  it("sends only the selected hunk through the inline AI explanation action", async () => {
+    const user = userEvent.setup();
+    const initialState = createDefaultAppState();
+    initialState.draft = {
+      ...initialState.draft,
+      leftText: "unchanged-head\nold-value\nunchanged-tail",
+      rightText: "unchanged-head\nnew-value\nunchanged-tail",
+    };
+    const profile: ModelProfile = {
+      id: "profile-1",
+      name: "测试模型",
+      provider: "custom",
+      baseUrl: "https://models.example.com/v1",
+      model: "test-chat",
+      rememberApiKey: false,
+      consentedOrigin: "https://models.example.com",
+      consentedAt: "2026-09-07T00:00:00.000Z",
+    };
+    const aiStorage = createAiStorage();
+    const initialAiSettings = await saveModelProfile(
+      createDefaultAiSettings(),
+      profile,
+      "sk-test",
+      aiStorage,
+    );
+    const diffClient = {
+      compare: vi.fn(async (leftText, rightText, options) => computeDiff(leftText, rightText, options)),
+      cancel: vi.fn(),
+      dispose: vi.fn(),
+    };
+    const aiClient = {
+      testConnection: vi.fn(),
+      complete: vi.fn().mockResolvedValue(JSON.stringify({
+        summary: "当前值发生变化。",
+        risks: [],
+        suggestions: [],
+      })),
+    };
+
+    render(
+      <App
+        initialState={initialState}
+        storage={new MemoryStorage()}
+        diffClient={diffClient}
+        initialAiSettings={initialAiSettings}
+        aiStorage={aiStorage}
+        aiClient={aiClient}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "查找差异" }));
+    await user.click(await screen.findByRole("button", { name: "选择第 1 处差异进行合并" }));
+    await user.click(screen.getByRole("button", { name: "AI 解释当前差异" }));
+    expect(await screen.findByText("当前值发生变化。")).toBeInTheDocument();
+
+    const messages = aiClient.complete.mock.calls[0]?.[2];
+    expect(JSON.stringify(messages)).toContain("old-value");
+    expect(JSON.stringify(messages)).toContain("new-value");
+    expect(JSON.stringify(messages)).not.toContain("unchanged-head");
+    expect(JSON.stringify(messages)).not.toContain("unchanged-tail");
   });
 });

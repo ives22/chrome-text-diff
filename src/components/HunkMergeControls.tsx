@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Sparkles, X } from "lucide-react";
 import type { DiffViewMode, MergeDirection } from "../core/types";
 import { IconButton } from "./IconButton";
 
@@ -7,6 +7,8 @@ interface HunkControlHeaderProps {
   total: number;
   onPrevious: () => void;
   onNext: () => void;
+  aiBusy: boolean;
+  onExplainAi: () => void;
 }
 
 interface HunkMergeActionsProps {
@@ -21,6 +23,8 @@ export function HunkControlHeader({
   total,
   onPrevious,
   onNext,
+  aiBusy,
+  onExplainAi,
 }: HunkControlHeaderProps) {
   return (
     <div className="hunk-panel-header">
@@ -50,6 +54,15 @@ export function HunkControlHeader({
           <span>下一处</span>
         </button>
       </div>
+      <button
+        type="button"
+        className="hunk-ai-button"
+        aria-label="AI 解释当前差异"
+        disabled={aiBusy}
+        onClick={onExplainAi}
+      >
+        <Sparkles size={14} aria-hidden="true" />AI 解释
+      </button>
     </div>
   );
 }

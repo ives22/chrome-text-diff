@@ -56,7 +56,20 @@ export async function initializeContextMenus(api: ChromeBackgroundApi): Promise<
   });
 }
 
-export async function openOrFocusWorkbench(api: ChromeBackgroundApi): Promise<number> {
+export async function handleExtensionInstalled(
+  reason: string,
+  api: ChromeBackgroundApi,
+): Promise<void> {
+  await initializeContextMenus(api);
+  if (reason === "install") {
+    await openOrFocusWorkbench(api, "workbench.html?setup=1");
+  }
+}
+
+export async function openOrFocusWorkbench(
+  api: ChromeBackgroundApi,
+  path = "workbench.html",
+): Promise<number> {
   const stored = await api.storage.session.get(WORKBENCH_TAB_KEY);
   const existingTabId = stored[WORKBENCH_TAB_KEY];
 
@@ -73,7 +86,7 @@ export async function openOrFocusWorkbench(api: ChromeBackgroundApi): Promise<nu
     }
   }
 
-  const tab = await api.tabs.create({ url: api.runtime.getURL("workbench.html") });
+  const tab = await api.tabs.create({ url: api.runtime.getURL(path) });
   if (typeof tab.id !== "number") throw new Error("无法创建 TextDiff 工作台标签页。");
   await api.storage.session.set({ [WORKBENCH_TAB_KEY]: tab.id });
   return tab.id;

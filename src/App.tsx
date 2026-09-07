@@ -5,6 +5,7 @@ import {
   Monitor,
   PanelLeftClose,
   PanelLeftOpen,
+  Settings,
   ShieldCheck,
   Sun,
 } from "lucide-react";
@@ -14,9 +15,48 @@ import { IconButton } from "./components/IconButton";
 import { InputWorkspace } from "./components/InputWorkspace";
 import { ResultToolbar } from "./components/ResultToolbar";
 import { ToolSidebar } from "./components/ToolSidebar";
+import { AiConsentDialog } from "./components/ai/AiConsentDialog";
+import { AiResultDrawer, type AiRunStatus } from "./components/ai/AiResultDrawer";
+import { AiSettingsDrawer } from "./components/ai/AiSettingsDrawer";
+import { AiSetupWizard } from "./components/ai/AiSetupWizard";
+import { SuggestionPreviewDialog } from "./components/ai/SuggestionPreviewDialog";
+import { AiClient, type ChatMessage, type CompletionOptions } from "./ai/aiClient";
+import {
+  analyzeFullComparison,
+  analyzeHunk,
+  createFullTextAnalysisPlan,
+} from "./ai/analysis";
+import {
+  completeAiOnboarding,
+  createDefaultAiSettings,
+  createDefaultAiStorageAdapter,
+  deleteModelProfile,
+  getModelSecret,
+  loadAiSettings,
+  saveModelProfile,
+  setActiveModelProfile,
+  type AiStorageAdapter,
+} from "./ai/aiStorage";
+import {
+  createChromePermissionAdapter,
+  ensureOriginPermission,
+  getOriginPattern,
+} from "./ai/permissions";
+import {
+  bindAiSuggestions,
+  createAiHunkContexts,
+  resolveSuggestionHunk,
+  type BoundHunkSuggestion,
+} from "./ai/suggestions";
+import type {
+  AiAnalysisResult,
+  AiSettings,
+  ModelConnectionResult,
+  ModelProfile,
+} from "./ai/types";
 import { createUnifiedPatch, validateText } from "./core/diffEngine";
 import { DiffWorkerClient } from "./core/diffWorkerClient";
-import { applyHunkMerge } from "./core/hunkMerge";
+import { applyHunkMerge, applyHunkReplacement } from "./core/hunkMerge";
 import { pushMergeUndo, type MergeUndoEntry } from "./core/mergeUndo";
 import {
   addHistoryEntry,
@@ -46,10 +86,27 @@ interface DiffClient {
   dispose(): void;
 }
 
+interface AiClientLike {
+  complete(
+    profile: ModelProfile,
+    apiKey: string,
+    messages: ChatMessage[],
+    options?: CompletionOptions,
+  ): Promise<string>;
+  testConnection(
+    profile: ModelProfile,
+    apiKey: string,
+    signal?: AbortSignal,
+  ): Promise<ModelConnectionResult>;
+}
+
 interface AppProps {
   initialState?: AppState;
   storage?: StorageAdapter;
   diffClient?: DiffClient;
+  initialAiSettings?: AiSettings;
+  aiStorage?: AiStorageAdapter;
+  aiClient?: AiClientLike;
 }
 
 interface ComparisonNavigation {
@@ -58,12 +115,51 @@ interface ComparisonNavigation {
   allowEmpty?: boolean;
 }
 
-export function App({ initialState, storage: providedStorage, diffClient }: AppProps = {}) {
+interface PendingAiAction {
+  scope: "full" | "hunk";
+  hunkIndex?: number;
+  requestCount: number;
+  requiresConsent: boolean;
+}
+
+interface SuggestionPreviewState {
+  suggestion: BoundHunkSuggestion;
+  leftText: string;
+  rightText: string;
+}
+
+interface AiRunState {
+  status: AiRunStatus;
+  result: AiAnalysisResult | null;
+  suggestions: BoundHunkSuggestion[];
+  error: string | null;
+}
+
+function createEmptyAiRun(): AiRunState {
+  return { status: "idle", result: null, suggestions: [], error: null };
+}
+
+export function App({
+  initialState,
+  storage: providedStorage,
+  diffClient,
+  initialAiSettings,
+  aiStorage: providedAiStorage,
+  aiClient: providedAiClient,
+}: AppProps = {}) {
   const storage = useMemo(
     () => providedStorage ?? createDefaultStorageAdapter(),
     [providedStorage],
   );
   const client = useMemo(() => diffClient ?? new DiffWorkerClient(), [diffClient]);
+  const aiStorage = useMemo(
+    () => providedAiStorage ?? createDefaultAiStorageAdapter(),
+    [providedAiStorage],
+  );
+  const aiClient = useMemo<AiClientLike>(
+    () => providedAiClient ?? new AiClient(),
+    [providedAiClient],
+  );
   const [state, setState] = useState<AppState>(() => initialState ?? createDefaultAppState());
   const [hydrated, setHydrated] = useState(Boolean(initialState));
   const [screen, setScreen] = useState<"input" | "result">("input");
@@ -78,9 +174,29 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
   const [isNarrow, setIsNarrow] = useState(() => window.innerWidth < 960);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [aiSettings, setAiSettings] = useState<AiSettings>(
+    () => initialAiSettings ?? createDefaultAiSettings(),
+  );
+  const [aiHydrated, setAiHydrated] = useState(Boolean(initialAiSettings));
+  const [secretProfileIds, setSecretProfileIds] = useState<Set<string>>(new Set());
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  const [aiOnboardingOpen, setAiOnboardingOpen] = useState(
+    () => new URLSearchParams(window.location.search).get("setup") === "1",
+  );
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
+  const [aiScope, setAiScope] = useState<"full" | "hunk">("full");
+  const [aiRuns, setAiRuns] = useState<Record<"full" | "hunk", AiRunState>>(() => ({
+    full: createEmptyAiRun(),
+    hunk: createEmptyAiRun(),
+  }));
+  const [pendingAiAction, setPendingAiAction] = useState<PendingAiAction | null>(null);
+  const [suggestionPreview, setSuggestionPreview] = useState<SuggestionPreviewState | null>(null);
+  const [pendingDeleteProfileId, setPendingDeleteProfileId] = useState<string | null>(null);
   const initialPendingHandled = useRef(false);
   const mergeInFlight = useRef(false);
   const comparisonSequence = useRef(0);
+  const aiAbortController = useRef<AbortController | null>(null);
+  const aiRunningScope = useRef<"full" | "hunk" | null>(null);
 
   useEffect(() => {
     if (initialState) return;
@@ -95,6 +211,31 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
     });
     return () => { current = false; };
   }, [initialState, storage]);
+
+  useEffect(() => {
+    if (initialAiSettings) return;
+    let current = true;
+    void loadAiSettings(aiStorage).then((loaded) => {
+      if (!current) return;
+      setAiSettings(loaded);
+      if (loaded.onboardingCompleted) setAiOnboardingOpen(false);
+      setAiHydrated(true);
+    });
+    return () => { current = false; };
+  }, [aiStorage, initialAiSettings]);
+
+  useEffect(() => {
+    if (!aiHydrated) return;
+    let current = true;
+    void Promise.all(aiSettings.profiles.map(async (profile) => ({
+      id: profile.id,
+      hasSecret: Boolean(await getModelSecret(profile, aiStorage)),
+    }))).then((profiles) => {
+      if (!current) return;
+      setSecretProfileIds(new Set(profiles.filter((profile) => profile.hasSecret).map((profile) => profile.id)));
+    });
+    return () => { current = false; };
+  }, [aiHydrated, aiSettings.profiles, aiStorage]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -128,6 +269,7 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
 
   useEffect(() => () => {
     if (!diffClient) client.dispose();
+    aiAbortController.current?.abort();
   }, [client, diffClient]);
 
   const patchDraft = (patch: Partial<AppState["draft"]>, clearMergeUndo = false) => {
@@ -255,6 +397,299 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
     setActiveHunkIndex((current) =>
       (current + direction + result.hunks.length) % result.hunks.length,
     );
+  };
+
+  const activeAiProfile = aiSettings.profiles.find(
+    (profile) => profile.id === aiSettings.activeProfileId,
+  ) ?? null;
+  const activeAiRun = aiRuns[aiScope];
+  const aiBusy = aiRuns.full.status === "loading" || aiRuns.hunk.status === "loading";
+
+  const updateAiRun = (scope: "full" | "hunk", patch: Partial<AiRunState>) => {
+    setAiRuns((current) => ({
+      ...current,
+      [scope]: { ...current[scope], ...patch },
+    }));
+  };
+
+  const resolveAiSecret = async (profile: ModelProfile, provided?: string) => {
+    const secret = provided?.trim() || await getModelSecret(profile, aiStorage);
+    if (!secret) throw new Error("该模型尚未保存 API 密钥，请先编辑配置。");
+    return secret;
+  };
+
+  const handleTestAiProfile = async (
+    profile: ModelProfile,
+    apiKey?: string,
+  ): Promise<ModelConnectionResult> => {
+    const secret = await resolveAiSecret(profile, apiKey);
+    return aiClient.testConnection(profile, secret);
+  };
+
+  const handleSaveAiProfile = async (profile: ModelProfile, apiKey?: string) => {
+    if (!await ensureOriginPermission(profile.baseUrl, createChromePermissionAdapter())) {
+      throw new Error("未获得该模型服务地址的访问权限。");
+    }
+    const next = await saveModelProfile(aiSettings, profile, apiKey, aiStorage);
+    setAiSettings(next);
+    if (apiKey?.trim()) {
+      setSecretProfileIds((current) => new Set(current).add(profile.id));
+    }
+    setNotice(`模型配置“${profile.name}”已保存。`);
+  };
+
+  const finishAiOnboarding = () => {
+    setAiOnboardingOpen(false);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("setup");
+    window.history.replaceState(null, "", url);
+  };
+
+  const handleCompleteAiOnboarding = async (profile: ModelProfile, apiKey?: string) => {
+    if (!await ensureOriginPermission(profile.baseUrl, createChromePermissionAdapter())) {
+      throw new Error("未获得该模型服务地址的访问权限。");
+    }
+    let next = await saveModelProfile(aiSettings, profile, apiKey, aiStorage);
+    next = await completeAiOnboarding(next, aiStorage);
+    setAiSettings(next);
+    setSecretProfileIds((current) => new Set(current).add(profile.id));
+    finishAiOnboarding();
+    setNotice("AI 模型已配置，可从比较结果开始分析。");
+  };
+
+  const handleSkipAiOnboarding = async () => {
+    const next = await completeAiOnboarding(aiSettings, aiStorage);
+    setAiSettings(next);
+    finishAiOnboarding();
+  };
+
+  const handleSetActiveAiProfile = async (profileId: string) => {
+    try {
+      const next = await setActiveModelProfile(aiSettings, profileId, aiStorage);
+      setAiSettings(next);
+      aiAbortController.current?.abort();
+      setAiRuns({ full: createEmptyAiRun(), hunk: createEmptyAiRun() });
+    } catch (profileError) {
+      setNotice(profileError instanceof Error ? profileError.message : "无法切换模型配置。");
+    }
+  };
+
+  const handleDeleteAiProfile = async (profileId: string) => {
+    const profile = aiSettings.profiles.find((item) => item.id === profileId);
+    if (!profile) return;
+    try {
+      const next = await deleteModelProfile(aiSettings, profileId, aiStorage);
+      setAiSettings(next);
+      setSecretProfileIds((current) => {
+        const ids = new Set(current);
+        ids.delete(profileId);
+        return ids;
+      });
+      const origin = new URL(profile.baseUrl).origin;
+      if (!next.profiles.some((item) => new URL(item.baseUrl).origin === origin)) {
+        await createChromePermissionAdapter().remove({ origins: [getOriginPattern(profile.baseUrl)] });
+      }
+      if (next.profiles.length === 0) {
+        aiAbortController.current?.abort();
+        setAiDrawerOpen(false);
+      }
+      setNotice(`模型配置“${profile.name}”已删除。`);
+    } catch (deleteError) {
+      setNotice(deleteError instanceof Error ? deleteError.message : "模型配置删除失败。");
+    } finally {
+      setPendingDeleteProfileId(null);
+    }
+  };
+
+  const executeAiAction = async (
+    action: PendingAiAction,
+    profile: ModelProfile,
+  ) => {
+    if (!result) return;
+    const resultSnapshot = result;
+    const draftSnapshot = state.draft;
+    let secret: string;
+    try {
+      secret = await resolveAiSecret(profile);
+    } catch (secretError) {
+      setNotice(secretError instanceof Error ? secretError.message : "缺少 API 密钥。");
+      setAiSettingsOpen(true);
+      return;
+    }
+
+    aiAbortController.current?.abort();
+    const controller = new AbortController();
+    aiAbortController.current = controller;
+    aiRunningScope.current = action.scope;
+    setAiScope(action.scope);
+    setAiDrawerOpen(true);
+    updateAiRun(action.scope, {
+      status: "loading",
+      error: null,
+      result: null,
+      suggestions: [],
+    });
+
+    try {
+      const contexts = createAiHunkContexts(resultSnapshot);
+      const analysis = action.scope === "full"
+        ? await analyzeFullComparison(aiClient, profile, secret, {
+            leftText: draftSnapshot.leftText,
+            rightText: draftSnapshot.rightText,
+            leftName: draftSnapshot.leftName,
+            rightName: draftSnapshot.rightName,
+            hunks: contexts,
+          }, controller.signal)
+        : await analyzeHunk(aiClient, profile, secret, {
+            ...contexts[action.hunkIndex ?? activeHunkIndex]!,
+            leftName: draftSnapshot.leftName,
+            rightName: draftSnapshot.rightName,
+            options: draftSnapshot.options,
+          }, controller.signal);
+      if (aiAbortController.current !== controller) return;
+      updateAiRun(action.scope, {
+        result: analysis,
+        suggestions: bindAiSuggestions(resultSnapshot, analysis.suggestions),
+        status: "success",
+      });
+    } catch (analysisError) {
+      if (aiAbortController.current !== controller) return;
+      const code = analysisError && typeof analysisError === "object"
+        ? (analysisError as { code?: string }).code
+        : undefined;
+      if (code === "CANCELLED") {
+        updateAiRun(action.scope, { status: "idle" });
+      } else {
+        updateAiRun(action.scope, {
+          error: analysisError instanceof Error ? analysisError.message : "AI 分析失败。",
+          status: "error",
+        });
+      }
+    } finally {
+      if (aiAbortController.current === controller) {
+        aiAbortController.current = null;
+        aiRunningScope.current = null;
+      }
+    }
+  };
+
+  const prepareAiAction = async (scope: "full" | "hunk") => {
+    if (!result) return;
+    if (!activeAiProfile) {
+      setNotice("请先配置一个 AI 模型。");
+      setAiSettingsOpen(true);
+      return;
+    }
+    if (!await getModelSecret(activeAiProfile, aiStorage)) {
+      setNotice("当前模型缺少 API 密钥，请先编辑配置。");
+      setAiSettingsOpen(true);
+      return;
+    }
+
+    let requestCount = 1;
+    try {
+      if (scope === "full") {
+        requestCount = createFullTextAnalysisPlan(
+          state.draft.leftText,
+          state.draft.rightText,
+        ).requestCount;
+      }
+    } catch (planError) {
+      setNotice(planError instanceof Error ? planError.message : "当前文本无法进行全文 AI 分析。");
+      return;
+    }
+    const requiresConsent = activeAiProfile.consentedOrigin !== new URL(activeAiProfile.baseUrl).origin;
+    const action: PendingAiAction = {
+      scope,
+      hunkIndex: scope === "hunk" ? activeHunkIndex : undefined,
+      requestCount,
+      requiresConsent,
+    };
+    if (requiresConsent || requestCount > 1) {
+      setPendingAiAction(action);
+    } else {
+      await executeAiAction(action, activeAiProfile);
+    }
+  };
+
+  const confirmAiAction = async () => {
+    if (!pendingAiAction || !activeAiProfile) return;
+    let profile = activeAiProfile;
+    if (pendingAiAction.requiresConsent) {
+      profile = {
+        ...activeAiProfile,
+        consentedOrigin: new URL(activeAiProfile.baseUrl).origin,
+        consentedAt: new Date().toISOString(),
+      };
+      const next = await saveModelProfile(aiSettings, profile, undefined, aiStorage);
+      setAiSettings(next);
+    }
+    const action = pendingAiAction;
+    setPendingAiAction(null);
+    await executeAiAction(action, profile);
+  };
+
+  const cancelAiAnalysis = () => {
+    const scope = aiRunningScope.current ?? aiScope;
+    aiAbortController.current?.abort();
+    aiAbortController.current = null;
+    aiRunningScope.current = null;
+    updateAiRun(scope, { status: "idle" });
+  };
+
+  const previewAiSuggestion = (suggestion: BoundHunkSuggestion) => {
+    if (!result) return;
+    const resolved = resolveSuggestionHunk(result, suggestion);
+    if (!resolved) {
+      setNotice("该建议已过期，请重新生成 AI 分析。");
+      return;
+    }
+    const context = createAiHunkContexts(result)[resolved.index];
+    if (!context) return;
+    setSuggestionPreview({
+      suggestion,
+      leftText: context.leftText,
+      rightText: context.rightText,
+    });
+  };
+
+  const applyAiSuggestion = async (target: "left" | "right") => {
+    if (!suggestionPreview || !result || suggestionPreview.suggestion.replacementText === undefined) return;
+    const resolved = resolveSuggestionHunk(result, suggestionPreview.suggestion);
+    if (!resolved) {
+      setSuggestionPreview(null);
+      setNotice("该建议已过期，请重新生成 AI 分析。");
+      return;
+    }
+    const draft = {
+      ...applyHunkReplacement(
+        state.draft,
+        resolved.hunk,
+        target,
+        suggestionPreview.suggestion.replacementText,
+      ),
+      updatedAt: new Date().toISOString(),
+    };
+    const targetText = target === "left" ? draft.leftText : draft.rightText;
+    const validation = validateText(targetText);
+    if (!validation.valid) {
+      setNotice(formatValidationError(target === "left" ? "原始文本" : "更改后文本", validation.reason));
+      return;
+    }
+    const previousText = target === "left" ? state.draft.leftText : state.draft.rightText;
+    setMergeUndoStack((current) => pushMergeUndo(current, {
+      target,
+      previousText,
+      hunkIndex: resolved.index,
+    }));
+    setState((current) => ({ ...current, draft }));
+    setSuggestionPreview(null);
+    await runComparison(draft, {
+      activeHunkIndex: resolved.index,
+      keepMergePanelOpen: true,
+      allowEmpty: true,
+    });
+    setNotice(`AI 建议已应用到${target === "left" ? "左侧" : "右侧"}，可使用撤销恢复。`);
   };
 
   const handleMerge = async (direction: MergeDirection) => {
@@ -477,9 +912,16 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
     : state.settings.theme === "light"
       ? <Sun size={17} />
       : <Monitor size={17} />;
+  const displayedAiSuggestions = activeAiRun.suggestions.map((suggestion) => ({
+    suggestion,
+    stale: !result || !resolveSuggestionHunk(result, suggestion),
+  }));
+  const profilePendingDelete = aiSettings.profiles.find(
+    (profile) => profile.id === pendingDeleteProfileId,
+  );
 
   return (
-    <div className={`app-shell ${sidebarHidden ? "sidebar-collapsed" : ""} ${mobileSidebarOpen ? "sidebar-mobile-open" : ""}`}>
+    <div className={`app-shell ${sidebarHidden ? "sidebar-collapsed" : ""} ${mobileSidebarOpen ? "sidebar-mobile-open" : ""} ${aiDrawerOpen ? "ai-drawer-open" : ""}`}>
       <header className="app-header">
         <div className="brand-cluster">
           <IconButton
@@ -493,7 +935,12 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
           <div className="brand-name"><strong>TextDiff</strong><span>文本对比</span></div>
         </div>
         <div className="header-status">
-          <span className="privacy-badge"><ShieldCheck size={14} />离线</span>
+          <span className="privacy-badge" title={activeAiProfile ? "本地比较；仅在点击 AI 功能时发送指定文本" : "全部功能仅在本地处理"}>
+            <ShieldCheck size={14} />{activeAiProfile ? "本地比较 · AI 按需" : "离线"}
+          </span>
+          <IconButton label="AI 模型设置" onClick={() => setAiSettingsOpen(true)}>
+            <Settings size={17} />
+          </IconButton>
           <IconButton label={`主题：${themeLabel(state.settings.theme)}`} onClick={cycleTheme}>
             {themeIcon}
           </IconButton>
@@ -559,7 +1006,9 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
               onExport={exportPatch}
               canUndo={mergeUndoStack.length > 0 && !isComparing}
               onUndo={() => void handleUndoMerge()}
-              busy={isComparing}
+              busy={isComparing || aiBusy}
+              aiBusy={aiBusy}
+              onAiAnalyze={() => void prepareAiAction("full")}
             />
             <DiffViewer
               result={result}
@@ -576,10 +1025,74 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
               onPreviousHunk={() => moveHunk(-1)}
               onNextHunk={() => moveHunk(1)}
               onMerge={(direction) => void handleMerge(direction)}
+              aiBusy={aiBusy}
+              onExplainAi={() => void prepareAiAction("hunk")}
             />
           </section>
         )}
       </main>
+
+      <AiResultDrawer
+        open={aiDrawerOpen}
+        scope={aiScope}
+        status={activeAiRun.status}
+        result={activeAiRun.result}
+        suggestions={displayedAiSuggestions}
+        profiles={aiSettings.profiles}
+        activeProfileId={aiSettings.activeProfileId}
+        error={activeAiRun.error}
+        onScopeChange={setAiScope}
+        onModelChange={(profileId) => void handleSetActiveAiProfile(profileId)}
+        onRegenerate={() => void prepareAiAction(aiScope)}
+        onCancel={cancelAiAnalysis}
+        onClose={() => {
+          if (aiBusy) cancelAiAnalysis();
+          setAiDrawerOpen(false);
+        }}
+        onPreviewSuggestion={previewAiSuggestion}
+      />
+
+      <AiSettingsDrawer
+        open={aiSettingsOpen}
+        settings={aiSettings}
+        secretProfileIds={secretProfileIds}
+        onClose={() => setAiSettingsOpen(false)}
+        onSave={handleSaveAiProfile}
+        onTest={handleTestAiProfile}
+        onSetActive={(profileId) => void handleSetActiveAiProfile(profileId)}
+        onDelete={setPendingDeleteProfileId}
+      />
+
+      <AiSetupWizard
+        open={aiHydrated && aiOnboardingOpen}
+        onSkip={() => void handleSkipAiOnboarding()}
+        onTest={handleTestAiProfile}
+        onComplete={handleCompleteAiOnboarding}
+      />
+
+      {pendingAiAction && activeAiProfile && (
+        <AiConsentDialog
+          open
+          profile={activeAiProfile}
+          scope={pendingAiAction.scope}
+          requestCount={pendingAiAction.requestCount}
+          requiresConsent={pendingAiAction.requiresConsent}
+          onCancel={() => setPendingAiAction(null)}
+          onConfirm={() => void confirmAiAction()}
+        />
+      )}
+
+      {suggestionPreview && (
+        <SuggestionPreviewDialog
+          open
+          suggestion={suggestionPreview.suggestion}
+          leftText={suggestionPreview.leftText}
+          rightText={suggestionPreview.rightText}
+          options={state.draft.options}
+          onCancel={() => setSuggestionPreview(null)}
+          onApply={(target) => void applyAiSuggestion(target)}
+        />
+      )}
 
       {notice && (
         <button type="button" className="toast" role="status" onClick={() => setNotice(null)}>
@@ -597,6 +1110,18 @@ export function App({ initialState, storage: providedStorage, diffClient }: AppP
           setState((current) => ({ ...current, history: [] }));
           setConfirmClearHistory(false);
           setNotice("历史记录已清空。");
+        }}
+      />
+      <ConfirmDialog
+        open={Boolean(profilePendingDelete)}
+        title="删除模型配置？"
+        message={profilePendingDelete
+          ? `“${profilePendingDelete.name}”的配置和本地密钥将被移除。`
+          : "模型配置和本地密钥将被移除。"}
+        confirmLabel="删除模型"
+        onCancel={() => setPendingDeleteProfileId(null)}
+        onConfirm={() => {
+          if (pendingDeleteProfileId) void handleDeleteAiProfile(pendingDeleteProfileId);
         }}
       />
     </div>

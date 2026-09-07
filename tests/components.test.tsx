@@ -77,6 +77,8 @@ const viewerActions = {
   onPreviousHunk: vi.fn(),
   onNextHunk: vi.fn(),
   onMerge: vi.fn(),
+  aiBusy: false,
+  onExplainAi: vi.fn(),
 };
 
 describe("InputWorkspace", () => {
@@ -246,6 +248,8 @@ describe("DiffViewer", () => {
           onPreviousHunk={onPreviousHunk}
           onNextHunk={onNextHunk}
           onMerge={onMerge}
+          aiBusy={false}
+          onExplainAi={vi.fn()}
         />
       );
     }
@@ -308,6 +312,8 @@ describe("DiffViewer", () => {
         onPreviousHunk={vi.fn()}
         onNextHunk={vi.fn()}
         onMerge={vi.fn()}
+        aiBusy={false}
+        onExplainAi={vi.fn()}
       />,
     );
 
@@ -329,6 +335,8 @@ describe("DiffViewer", () => {
         onPreviousHunk={vi.fn()}
         onNextHunk={vi.fn()}
         onMerge={vi.fn()}
+        aiBusy={false}
+        onExplainAi={vi.fn()}
       />,
     );
     const unifiedPanel = screen.getByRole("group", { name: "当前差异操作" });
@@ -352,6 +360,8 @@ describe("DiffViewer", () => {
         onPreviousHunk={vi.fn()}
         onNextHunk={vi.fn()}
         onMerge={vi.fn()}
+        aiBusy={false}
+        onExplainAi={vi.fn()}
       />,
     );
 

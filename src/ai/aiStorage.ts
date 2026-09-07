@@ -125,6 +125,28 @@ export async function deleteModelProfile(
   return next;
 }
 
+export async function setActiveModelProfile(
+  settings: AiSettings,
+  profileId: string,
+  storage = createDefaultAiStorageAdapter(),
+): Promise<AiSettings> {
+  if (!settings.profiles.some((profile) => profile.id === profileId)) {
+    throw new Error("所选模型配置不存在。");
+  }
+  const next = { ...settings, activeProfileId: profileId };
+  await persistAiSettings(next, storage);
+  return next;
+}
+
+export async function completeAiOnboarding(
+  settings: AiSettings,
+  storage = createDefaultAiStorageAdapter(),
+): Promise<AiSettings> {
+  const next = { ...settings, onboardingCompleted: true };
+  await persistAiSettings(next, storage);
+  return next;
+}
+
 export function createDefaultAiStorageAdapter(): AiStorageAdapter {
   if (typeof chrome !== "undefined" && chrome.storage?.local && chrome.storage?.session) {
     return {

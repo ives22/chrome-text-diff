@@ -22,6 +22,8 @@ interface DiffViewerProps {
   onPreviousHunk: () => void;
   onNextHunk: () => void;
   onMerge: (direction: MergeDirection) => void;
+  aiBusy: boolean;
+  onExplainAi: () => void;
 }
 
 type ContentDisplayRow =
@@ -56,6 +58,8 @@ export function DiffViewer({
   onPreviousHunk,
   onNextHunk,
   onMerge,
+  aiBusy,
+  onExplainAi,
 }: DiffViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const compactViewport = useCompactViewport();
@@ -157,6 +161,8 @@ export function DiffViewer({
                       total={result.hunks.length}
                       onPrevious={onPreviousHunk}
                       onNext={onNextHunk}
+                      aiBusy={aiBusy}
+                      onExplainAi={onExplainAi}
                     />
                     <div className="hunk-panel-body">
                       {item.rows.map((row) => (

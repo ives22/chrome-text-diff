@@ -3,9 +3,11 @@ import {
   AI_SETTINGS_KEY,
   createDefaultAiSettings,
   deleteModelProfile,
+  completeAiOnboarding,
   getModelSecret,
   loadAiSettings,
   saveModelProfile,
+  setActiveModelProfile,
   type AiStorageAdapter,
   type StorageArea,
 } from "../src/ai/aiStorage";
@@ -152,5 +154,24 @@ describe("AI settings storage", () => {
     expect(settings.profiles).toEqual([]);
     expect(JSON.stringify((storage.local as MemoryArea).data)).not.toContain("sk-delete-me");
     expect(JSON.stringify((storage.session as MemoryArea).data)).not.toContain("sk-delete-me");
+  });
+
+  it("completes onboarding and switches the active profile without changing secrets", async () => {
+    const storage = createStorage();
+    let settings = await saveModelProfile(
+      createDefaultAiSettings(),
+      profile,
+      "sk-keep",
+      storage,
+    );
+    const second = { ...profile, id: "profile-2", name: "第二个模型" };
+    settings = await saveModelProfile(settings, second, "sk-second", storage);
+
+    settings = await setActiveModelProfile(settings, second.id, storage);
+    settings = await completeAiOnboarding(settings, storage);
+
+    expect(settings.activeProfileId).toBe(second.id);
+    expect(settings.onboardingCompleted).toBe(true);
+    expect(await getModelSecret(profile, storage)).toBe("sk-keep");
   });
 });

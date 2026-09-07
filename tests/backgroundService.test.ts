@@ -4,6 +4,7 @@ import {
   CONTEXT_MENU_ORIGINAL,
   WORKBENCH_TAB_KEY,
   handleContextMenuClick,
+  handleExtensionInstalled,
   initializeContextMenus,
   openOrFocusWorkbench,
   type ChromeBackgroundApi,
@@ -65,6 +66,19 @@ describe("background service", () => {
       id: CONTEXT_MENU_COMPARE,
       contexts: ["selection"],
     }));
+  });
+
+  it("opens onboarding only for a fresh installation", async () => {
+    const installed = createChromeApi();
+    await handleExtensionInstalled("install", installed.api);
+    expect(installed.api.tabs.create).toHaveBeenCalledWith({
+      url: "chrome-extension://id/workbench.html?setup=1",
+    });
+
+    const updated = createChromeApi();
+    await handleExtensionInstalled("update", updated.api);
+    expect(updated.api.tabs.create).not.toHaveBeenCalled();
+    expect(updated.api.contextMenus.create).toHaveBeenCalledTimes(2);
   });
 
   it("focuses an existing workbench tab instead of creating a duplicate", async () => {
