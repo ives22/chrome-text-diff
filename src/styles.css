@@ -6,6 +6,9 @@
   --surface: #ffffff;
   --surface-muted: #eef2f0;
   --surface-hover: #e8eeeb;
+  --merge-panel-surface: #ffffff;
+  --merge-panel-header: #fbfdfc;
+  --merge-panel-halo: #e5f0ec;
   --text: #17211d;
   --text-muted: #66706c;
   --text-faint: #8b9591;
@@ -33,6 +36,9 @@
   --surface: #1a211f;
   --surface-muted: #232c29;
   --surface-hover: #2a3531;
+  --merge-panel-surface: #252e2b;
+  --merge-panel-header: #29332f;
+  --merge-panel-halo: #17201d;
   --text: #e8efec;
   --text-muted: #a9b5b0;
   --text-faint: #7d8a85;
@@ -59,6 +65,9 @@
     --surface: #1a211f;
     --surface-muted: #232c29;
     --surface-hover: #2a3531;
+    --merge-panel-surface: #252e2b;
+    --merge-panel-header: #29332f;
+    --merge-panel-halo: #17201d;
     --text: #e8efec;
     --text-muted: #a9b5b0;
     --text-faint: #7d8a85;
@@ -904,16 +913,19 @@ input:focus-visible,
 
 .selected-hunk-item {
   z-index: 3;
-  padding: 3px 0;
+  padding: 6px 4px;
+  background: var(--merge-panel-halo);
 }
 
 .hunk-merge-panel {
   width: 100%;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--accent) 68%, var(--border-strong));
+  border: 1px solid color-mix(in srgb, var(--accent) 74%, var(--border-strong));
   border-radius: 6px;
-  background: var(--surface);
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--text) 10%, transparent);
+  background: var(--merge-panel-surface);
+  box-shadow:
+    0 8px 20px color-mix(in srgb, var(--text) 14%, transparent),
+    0 1px 3px color-mix(in srgb, var(--text) 10%, transparent);
 }
 
 .hunk-panel-header {
@@ -924,7 +936,7 @@ input:focus-visible,
   min-height: 44px;
   padding: 6px 10px 6px 12px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--accent-soft) 26%, var(--surface));
+  background: var(--merge-panel-header);
 }
 
 .hunk-position,
@@ -978,7 +990,7 @@ input:focus-visible,
 }
 
 .hunk-panel-body {
-  background: var(--surface);
+  background: var(--merge-panel-surface);
 }
 
 .hunk-panel-content-row:last-child .diff-cell,
@@ -991,7 +1003,7 @@ input:focus-visible,
   grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
   min-height: 52px;
   border-top: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface));
+  background: var(--merge-panel-surface);
 }
 
 .hunk-merge-side {
@@ -1032,7 +1044,7 @@ input:focus-visible,
   flex-basis: 32px;
   border-color: var(--border-strong);
   border-radius: 50%;
-  background: var(--surface);
+  background: var(--merge-panel-surface);
   box-shadow: 0 1px 3px color-mix(in srgb, var(--text) 12%, transparent);
   color: var(--text-muted);
 }
