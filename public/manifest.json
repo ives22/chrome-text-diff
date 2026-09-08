@@ -3,7 +3,7 @@
   "name": "文本对比 TextDiff",
   "short_name": "TextDiff",
   "description": "在浏览器本地比较文本，并可按需使用自定义 AI 模型分析差异。",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "permissions": ["storage", "contextMenus", "clipboardWrite"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "content_security_policy": {

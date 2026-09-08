@@ -40,9 +40,9 @@ export function ResultToolbar(props: ResultToolbarProps) {
               className="result-global-summary"
               aria-label={`${props.unchangedLines} 行未变，${props.hunkCount} 处差异`}
             >
-              <span>{props.unchangedLines} 行未变</span>
+              <span className="result-unchanged-count">{props.unchangedLines} 行未变</span>
               <span aria-hidden="true">·</span>
-              <span>{props.hunkCount} 处差异</span>
+              <span className="result-hunk-count">{props.hunkCount} 处差异</span>
             </div>
           </div>
         </div>

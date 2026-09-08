@@ -126,7 +126,7 @@ npm test
 npm run build
 ```
 
-`npm run package` 会执行生产构建，并按当前版本生成 ZIP，例如 `artifacts/textdiff-v0.3.4.zip`。GitHub Actions 在每次提交和拉取请求上运行完整门禁，并上传同样的构建产物。
+`npm run package` 会执行生产构建，并按当前版本生成 ZIP，例如 `artifacts/textdiff-v0.3.5.zip`。GitHub Actions 在每次提交和拉取请求上运行完整门禁，并上传同样的构建产物。
 
 ## 技术结构
 
