@@ -82,6 +82,8 @@ const viewerActions = {
   onExplainAi: vi.fn(),
   onCopyLeft: vi.fn(),
   onCopyRight: vi.fn(),
+  leftLineCount: 2,
+  rightLineCount: 2,
 };
 
 describe("InputWorkspace", () => {
@@ -225,7 +227,7 @@ describe("DiffViewer", () => {
     expect(screen.getByText("67 新增")).toBeInTheDocument();
     expect(screen.getByText("50 行")).toBeInTheDocument();
     expect(screen.getByText("61 行")).toBeInTheDocument();
-    expect(screen.getByText("74 行未变")).toBeInTheDocument();
+    expect(screen.queryByText("74 行未变")).not.toBeInTheDocument();
     expect(screen.getByTitle("57 个删除差异单元，影响 50 行")).toBeInTheDocument();
     expect(screen.getByTitle("67 个新增差异单元，影响 61 行")).toBeInTheDocument();
   });
@@ -243,17 +245,22 @@ describe("DiffViewer", () => {
         {...viewerActions}
         onCopyLeft={onCopyLeft}
         onCopyRight={onCopyRight}
+        leftLineCount={124}
+        rightLineCount={135}
       />,
     );
 
     const leftSummary = container.querySelector(".diff-pane-summary-left") as HTMLElement;
     const rightSummary = container.querySelector(".diff-pane-summary-right") as HTMLElement;
-    const globalSummary = container.querySelector(".diff-global-summary") as HTMLElement;
     expect(leftSummary).toContainElement(screen.getByText("1 删除"));
     expect(leftSummary).toContainElement(screen.getByRole("button", { name: "复制原始文本" }));
     expect(rightSummary).toContainElement(screen.getByText("1 新增"));
     expect(rightSummary).toContainElement(screen.getByRole("button", { name: "复制更改后文本" }));
-    expect(globalSummary).toHaveTextContent(/1 行未变\s*·\s*1 处差异/);
+    expect(within(leftSummary).getByText("124 行")).toBeInTheDocument();
+    expect(within(rightSummary).getByText("135 行")).toBeInTheDocument();
+    expect(within(leftSummary).getByRole("button", { name: "复制原始文本" })).toHaveTextContent("复制");
+    expect(within(rightSummary).getByRole("button", { name: "复制更改后文本" })).toHaveTextContent("复制");
+    expect(container.querySelector(".diff-global-summary")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "复制原始文本" }));
     await user.click(screen.getByRole("button", { name: "复制更改后文本" }));
@@ -287,6 +294,8 @@ describe("DiffViewer", () => {
           onExplainAi={onExplainAi}
           onCopyLeft={vi.fn()}
           onCopyRight={vi.fn()}
+          leftLineCount={2}
+          rightLineCount={2}
         />
       );
     }
@@ -356,6 +365,8 @@ describe("DiffViewer", () => {
         onExplainAi={vi.fn()}
         onCopyLeft={vi.fn()}
         onCopyRight={vi.fn()}
+        leftLineCount={2}
+        rightLineCount={2}
       />,
     );
 
@@ -381,6 +392,8 @@ describe("DiffViewer", () => {
         onExplainAi={vi.fn()}
         onCopyLeft={vi.fn()}
         onCopyRight={vi.fn()}
+        leftLineCount={2}
+        rightLineCount={2}
       />,
     );
     const unifiedPanel = screen.getByRole("group", { name: "当前差异操作" });
@@ -408,6 +421,8 @@ describe("DiffViewer", () => {
         onExplainAi={vi.fn()}
         onCopyLeft={vi.fn()}
         onCopyRight={vi.fn()}
+        leftLineCount={2}
+        rightLineCount={2}
       />,
     );
 
@@ -422,6 +437,8 @@ describe("ResultToolbar", () => {
     render(
       <ResultToolbar
         title="before ↔ after"
+        unchangedLines={74}
+        hunkCount={22}
         onEdit={vi.fn()}
         onSwap={vi.fn()}
         onCopyPatch={vi.fn()}
@@ -438,6 +455,12 @@ describe("ResultToolbar", () => {
     expect(screen.getByRole("button", { name: "复制补丁" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "复制原始文本" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "复制更改后文本" })).not.toBeInTheDocument();
+    const titleLine = screen.getByRole("heading", { name: "before ↔ after" }).parentElement;
+    const globalSummary = screen.getByLabelText("74 行未变，22 处差异");
+    expect(titleLine).toHaveClass("result-title-line");
+    expect(screen.getByRole("heading", { name: "before ↔ after" }).nextElementSibling)
+      .toBe(globalSummary);
+    expect(globalSummary).toHaveTextContent(/74 行未变\s*·\s*22 处差异/);
   });
 });
 

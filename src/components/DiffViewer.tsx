@@ -10,7 +10,6 @@ import type {
   MergeDirection,
 } from "../core/types";
 import { HunkControlHeader, HunkMergeActions } from "./HunkMergeControls";
-import { IconButton } from "./IconButton";
 
 interface DiffViewerProps {
   result: DiffResult;
@@ -28,6 +27,8 @@ interface DiffViewerProps {
   onExplainAi: () => void;
   onCopyLeft: () => void;
   onCopyRight: () => void;
+  leftLineCount: number;
+  rightLineCount: number;
 }
 
 type ContentDisplayRow =
@@ -66,6 +67,8 @@ export function DiffViewer({
   onExplainAi,
   onCopyLeft,
   onCopyRight,
+  leftLineCount,
+  rightLineCount,
 }: DiffViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const compactViewport = useCompactViewport();
@@ -127,13 +130,11 @@ export function DiffViewer({
             units={result.stats.removedUnits}
             lines={result.stats.removedLines}
           />
-          <IconButton
+          <PaneCopyAction
+            lineCount={leftLineCount}
             label="复制原始文本"
-            className="diff-copy-button"
-            onClick={onCopyLeft}
-          >
-            <Copy size={15} />
-          </IconButton>
+            onCopy={onCopyLeft}
+          />
         </div>
         <div className="diff-pane-summary diff-pane-summary-right">
           <DiffStat
@@ -141,18 +142,11 @@ export function DiffViewer({
             units={result.stats.addedUnits}
             lines={result.stats.addedLines}
           />
-          <IconButton
+          <PaneCopyAction
+            lineCount={rightLineCount}
             label="复制更改后文本"
-            className="diff-copy-button"
-            onClick={onCopyRight}
-          >
-            <Copy size={15} />
-          </IconButton>
-        </div>
-        <div className="diff-global-summary">
-          <span>{result.stats.unchangedLines} 行未变</span>
-          <span className="diff-summary-separator" aria-hidden="true">·</span>
-          <span>{result.stats.hunks} 处差异</span>
+            onCopy={onCopyRight}
+          />
         </div>
       </header>
       <div
@@ -241,6 +235,32 @@ export function DiffViewer({
         </div>
       </div>
     </section>
+  );
+}
+
+function PaneCopyAction({
+  lineCount,
+  label,
+  onCopy,
+}: {
+  lineCount: number;
+  label: string;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="diff-pane-actions">
+      <span className="diff-text-lines">{lineCount.toLocaleString("zh-CN")} 行</span>
+      <button
+        type="button"
+        className="diff-copy-button"
+        aria-label={label}
+        title={label}
+        onClick={onCopy}
+      >
+        <Copy size={14} aria-hidden="true" />
+        <span>复制</span>
+      </button>
+    </div>
   );
 }
 

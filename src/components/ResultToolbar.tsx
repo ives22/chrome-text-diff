@@ -11,6 +11,8 @@ import { IconButton } from "./IconButton";
 
 interface ResultToolbarProps {
   title: string;
+  unchangedLines: number;
+  hunkCount: number;
   onEdit: () => void;
   onSwap: () => void;
   onCopyPatch: () => void;
@@ -32,7 +34,17 @@ export function ResultToolbar(props: ResultToolbarProps) {
         </button>
         <div className="result-title">
           <span className="eyebrow">当前比较</span>
-          <h1>{props.title}</h1>
+          <div className="result-title-line">
+            <h1>{props.title}</h1>
+            <div
+              className="result-global-summary"
+              aria-label={`${props.unchangedLines} 行未变，${props.hunkCount} 处差异`}
+            >
+              <span>{props.unchangedLines} 行未变</span>
+              <span aria-hidden="true">·</span>
+              <span>{props.hunkCount} 处差异</span>
+            </div>
+          </div>
         </div>
       </div>
       <div className="result-actions">

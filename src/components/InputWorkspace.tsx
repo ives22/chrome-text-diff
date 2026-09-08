@@ -2,6 +2,7 @@ import { useRef, useState, type DragEvent } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
 import { ArrowLeftRight, Eraser, FileUp, LoaderCircle, Search } from "lucide-react";
+import { countTextLines } from "../core/textMetrics";
 
 export interface InputWorkspaceProps {
   leftText: string;
@@ -106,7 +107,7 @@ function EditorPanel({
 }: EditorPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-  const lineCount = value === "" ? 0 : value.replace(/\r\n?/g, "\n").split("\n").length;
+  const lineCount = countTextLines(value);
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();

@@ -59,6 +59,7 @@ import { createUnifiedPatch, validateText } from "./core/diffEngine";
 import { DiffWorkerClient } from "./core/diffWorkerClient";
 import { applyHunkMerge, applyHunkReplacement } from "./core/hunkMerge";
 import { pushMergeUndo, type MergeUndoEntry } from "./core/mergeUndo";
+import { countTextLines } from "./core/textMetrics";
 import {
   addHistoryEntry,
   createDefaultAppState,
@@ -1047,6 +1048,8 @@ export function App({
           <section className="result-workspace">
             <ResultToolbar
               title={createComparisonTitle(state.draft.leftName, state.draft.rightName)}
+              unchangedLines={result.stats.unchangedLines}
+              hunkCount={result.stats.hunks}
               onEdit={() => setScreen("input")}
               onSwap={handleSwap}
               onCopyPatch={() => void copyText(patch, "补丁已复制。")}
@@ -1077,6 +1080,8 @@ export function App({
               onExplainAi={() => void prepareAiAction("hunk")}
               onCopyLeft={() => void copyText(state.draft.leftText, "原始文本已复制。")}
               onCopyRight={() => void copyText(state.draft.rightText, "更改后文本已复制。")}
+              leftLineCount={countTextLines(state.draft.leftText)}
+              rightLineCount={countTextLines(state.draft.rightText)}
             />
           </section>
         )}

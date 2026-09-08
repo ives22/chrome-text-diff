@@ -795,9 +795,32 @@ input:focus-visible,
   min-width: 0;
 }
 
+.result-title-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-width: 0;
+}
+
 .result-title h1 {
   max-width: 34vw;
   font-size: 16px;
+}
+
+.result-global-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-faint);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.result-global-summary span[aria-hidden="true"] {
+  color: var(--border-strong);
 }
 
 .result-actions {
@@ -819,7 +842,7 @@ input:focus-visible,
 .diff-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: 36px 22px;
+  grid-template-rows: 40px;
   min-width: 0;
   border-bottom: 1px solid var(--border);
   background: var(--surface-muted);
@@ -838,39 +861,43 @@ input:focus-visible,
   border-right: 1px solid var(--border);
 }
 
-.diff-copy-button.icon-button {
-  width: 28px;
-  height: 28px;
-  flex-basis: 28px;
-  border-color: var(--border);
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--surface) 78%, transparent);
-  color: var(--text-muted);
-}
-
-.diff-copy-button.icon-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: var(--surface);
-  color: var(--accent-strong);
-}
-
-.diff-global-summary {
-  grid-column: 1 / -1;
+.diff-pane-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
-  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  background: color-mix(in srgb, var(--surface) 46%, var(--surface-muted));
-  color: var(--text-muted);
+}
+
+.diff-text-lines {
+  color: var(--text-faint);
   font-family: "IBM Plex Mono", monospace;
   font-size: 10px;
   white-space: nowrap;
 }
 
-.diff-summary-separator {
-  color: var(--border-strong);
+.diff-copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 58px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.diff-copy-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--accent-strong);
 }
 
 .stat {
@@ -2212,6 +2239,10 @@ input:focus-visible,
     max-width: 64vw;
   }
 
+  .result-global-summary {
+    font-size: 9px;
+  }
+
   .diff-viewer {
     margin: 0 8px 8px;
   }
@@ -2268,22 +2299,37 @@ input:focus-visible,
   }
 
   .diff-summary {
-    grid-template-rows: 34px 20px;
+    grid-template-rows: 38px;
   }
 
   .diff-pane-summary {
     padding: 0 5px 0 7px;
   }
 
-  .diff-copy-button.icon-button {
-    width: 26px;
-    height: 26px;
-    flex-basis: 26px;
+  .diff-pane-actions {
+    gap: 5px;
   }
 
-  .diff-global-summary {
-    gap: 5px;
+  .diff-text-lines {
     font-size: 9px;
+  }
+
+  .diff-copy-button {
+    gap: 4px;
+    min-width: 50px;
+    height: 26px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+
+  .stat {
+    gap: 3px;
+    font-size: 10px;
+  }
+
+  .stat span {
+    width: 14px;
+    height: 14px;
   }
 
   .split-row {
