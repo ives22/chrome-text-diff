@@ -28,7 +28,7 @@ export function HunkControlHeader({
 }: HunkControlHeaderProps) {
   return (
     <div className="hunk-panel-header">
-      <div className="hunk-position">
+      <div className="hunk-position" aria-live="polite" aria-atomic="true">
         <strong>更改</strong>{" "}
         <span>{current} / {total}</span>
       </div>

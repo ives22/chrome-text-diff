@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { Copy } from "lucide-react";
 import type {
   DiffCell,
   DiffResult,
@@ -9,6 +10,7 @@ import type {
   MergeDirection,
 } from "../core/types";
 import { HunkControlHeader, HunkMergeActions } from "./HunkMergeControls";
+import { IconButton } from "./IconButton";
 
 interface DiffViewerProps {
   result: DiffResult;
@@ -24,6 +26,8 @@ interface DiffViewerProps {
   onMerge: (direction: MergeDirection) => void;
   aiBusy: boolean;
   onExplainAi: () => void;
+  onCopyLeft: () => void;
+  onCopyRight: () => void;
 }
 
 type ContentDisplayRow =
@@ -60,6 +64,8 @@ export function DiffViewer({
   onMerge,
   aiBusy,
   onExplainAi,
+  onCopyLeft,
+  onCopyRight,
 }: DiffViewerProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const compactViewport = useCompactViewport();
@@ -115,18 +121,39 @@ export function DiffViewer({
   return (
     <section className="diff-viewer" aria-label="差异结果">
       <header className="diff-summary">
-        <DiffStat
-          kind="remove"
-          units={result.stats.removedUnits}
-          lines={result.stats.removedLines}
-        />
-        <DiffStat
-          kind="add"
-          units={result.stats.addedUnits}
-          lines={result.stats.addedLines}
-        />
-        <div className="stat stat-neutral">{result.stats.unchangedLines} 行未变</div>
-        <div className="hunk-summary">{result.stats.hunks} 处差异</div>
+        <div className="diff-pane-summary diff-pane-summary-left">
+          <DiffStat
+            kind="remove"
+            units={result.stats.removedUnits}
+            lines={result.stats.removedLines}
+          />
+          <IconButton
+            label="复制原始文本"
+            className="diff-copy-button"
+            onClick={onCopyLeft}
+          >
+            <Copy size={15} />
+          </IconButton>
+        </div>
+        <div className="diff-pane-summary diff-pane-summary-right">
+          <DiffStat
+            kind="add"
+            units={result.stats.addedUnits}
+            lines={result.stats.addedLines}
+          />
+          <IconButton
+            label="复制更改后文本"
+            className="diff-copy-button"
+            onClick={onCopyRight}
+          >
+            <Copy size={15} />
+          </IconButton>
+        </div>
+        <div className="diff-global-summary">
+          <span>{result.stats.unchangedLines} 行未变</span>
+          <span className="diff-summary-separator" aria-hidden="true">·</span>
+          <span>{result.stats.hunks} 处差异</span>
+        </div>
       </header>
       <div
         ref={scrollRef}

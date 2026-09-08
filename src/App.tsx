@@ -815,6 +815,31 @@ export function App({
         event.preventDefault();
         setMergePanelOpen(false);
       }
+      const blocksPlainHunkNavigation =
+        aiSettingsOpen ||
+        aiOnboardingOpen ||
+        aiDrawerOpen ||
+        Boolean(pendingAiAction) ||
+        Boolean(suggestionPreview) ||
+        confirmClearHistory ||
+        Boolean(pendingDeleteProfileId);
+      if (
+        screen === "result" &&
+        mergePanelOpen &&
+        !isComparing &&
+        !blocksPlainHunkNavigation &&
+        !event.defaultPrevented &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        !isEditableTarget(event.target) &&
+        (event.key === "ArrowUp" || event.key === "ArrowDown")
+      ) {
+        event.preventDefault();
+        moveHunk(event.key === "ArrowUp" ? -1 : 1);
+        return;
+      }
       if (event.altKey && event.key === "ArrowDown") {
         event.preventDefault();
         moveHunk(1);
@@ -1024,8 +1049,6 @@ export function App({
               title={createComparisonTitle(state.draft.leftName, state.draft.rightName)}
               onEdit={() => setScreen("input")}
               onSwap={handleSwap}
-              onCopyLeft={() => void copyText(state.draft.leftText, "原始文本已复制。")}
-              onCopyRight={() => void copyText(state.draft.rightText, "更改后文本已复制。")}
               onCopyPatch={() => void copyText(patch, "补丁已复制。")}
               onSave={handleSave}
               onExport={exportPatch}
@@ -1052,6 +1075,8 @@ export function App({
               onMerge={(direction) => void handleMerge(direction)}
               aiBusy={aiBusy}
               onExplainAi={() => void prepareAiAction("hunk")}
+              onCopyLeft={() => void copyText(state.draft.leftText, "原始文本已复制。")}
+              onCopyRight={() => void copyText(state.draft.rightText, "更改后文本已复制。")}
             />
           </section>
         )}

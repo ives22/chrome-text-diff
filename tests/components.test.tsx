@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DiffViewer } from "../src/components/DiffViewer";
 import { HistoryPanel } from "../src/components/HistoryPanel";
 import { InputWorkspace } from "../src/components/InputWorkspace";
+import { ResultToolbar } from "../src/components/ResultToolbar";
 import { createHistoryEntry } from "../src/core/storage";
 import { DEFAULT_COMPARE_OPTIONS, type DiffResult } from "../src/core/types";
 
@@ -79,6 +80,8 @@ const viewerActions = {
   onMerge: vi.fn(),
   aiBusy: false,
   onExplainAi: vi.fn(),
+  onCopyLeft: vi.fn(),
+  onCopyRight: vi.fn(),
 };
 
 describe("InputWorkspace", () => {
@@ -227,6 +230,37 @@ describe("DiffViewer", () => {
     expect(screen.getByTitle("67 个新增差异单元，影响 61 行")).toBeInTheDocument();
   });
 
+  it("places each statistic and full-text copy action in its own pane header", async () => {
+    const user = userEvent.setup();
+    const onCopyLeft = vi.fn();
+    const onCopyRight = vi.fn();
+    const { container } = render(
+      <DiffViewer
+        result={result}
+        viewMode="split"
+        wrapLines
+        activeHunkIndex={0}
+        {...viewerActions}
+        onCopyLeft={onCopyLeft}
+        onCopyRight={onCopyRight}
+      />,
+    );
+
+    const leftSummary = container.querySelector(".diff-pane-summary-left") as HTMLElement;
+    const rightSummary = container.querySelector(".diff-pane-summary-right") as HTMLElement;
+    const globalSummary = container.querySelector(".diff-global-summary") as HTMLElement;
+    expect(leftSummary).toContainElement(screen.getByText("1 删除"));
+    expect(leftSummary).toContainElement(screen.getByRole("button", { name: "复制原始文本" }));
+    expect(rightSummary).toContainElement(screen.getByText("1 新增"));
+    expect(rightSummary).toContainElement(screen.getByRole("button", { name: "复制更改后文本" }));
+    expect(globalSummary).toHaveTextContent(/1 行未变\s*·\s*1 处差异/);
+
+    await user.click(screen.getByRole("button", { name: "复制原始文本" }));
+    await user.click(screen.getByRole("button", { name: "复制更改后文本" }));
+    expect(onCopyLeft).toHaveBeenCalledOnce();
+    expect(onCopyRight).toHaveBeenCalledOnce();
+  });
+
   it("opens inline controls from a changed row and merges in either direction", async () => {
     const user = userEvent.setup();
     const onMerge = vi.fn();
@@ -251,6 +285,8 @@ describe("DiffViewer", () => {
           onMerge={onMerge}
           aiBusy={false}
           onExplainAi={onExplainAi}
+          onCopyLeft={vi.fn()}
+          onCopyRight={vi.fn()}
         />
       );
     }
@@ -262,6 +298,7 @@ describe("DiffViewer", () => {
     const panel = screen.getByRole("group", { name: "当前差异操作" });
     expect(panel).toHaveClass("hunk-merge-panel");
     expect(panel).toHaveTextContent("更改 1 / 1");
+    expect(panel.querySelector(".hunk-position")).toHaveAttribute("aria-live", "polite");
     expect(panel).toContainElement(screen.getByText("eta"));
     expect(panel).toContainElement(screen.getByText("ravo"));
     expect(document.querySelectorAll(".hunk-merge-panel")).toHaveLength(1);
@@ -317,6 +354,8 @@ describe("DiffViewer", () => {
         onMerge={vi.fn()}
         aiBusy={false}
         onExplainAi={vi.fn()}
+        onCopyLeft={vi.fn()}
+        onCopyRight={vi.fn()}
       />,
     );
 
@@ -340,6 +379,8 @@ describe("DiffViewer", () => {
         onMerge={vi.fn()}
         aiBusy={false}
         onExplainAi={vi.fn()}
+        onCopyLeft={vi.fn()}
+        onCopyRight={vi.fn()}
       />,
     );
     const unifiedPanel = screen.getByRole("group", { name: "当前差异操作" });
@@ -365,12 +406,38 @@ describe("DiffViewer", () => {
         onMerge={vi.fn()}
         aiBusy={false}
         onExplainAi={vi.fn()}
+        onCopyLeft={vi.fn()}
+        onCopyRight={vi.fn()}
       />,
     );
 
     const canvas = container.querySelector(".virtual-canvas") as HTMLElement;
     expect(Number.parseFloat(canvas.style.height)).toBeGreaterThanOrEqual(206);
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+  });
+});
+
+describe("ResultToolbar", () => {
+  it("keeps patch copy in the toolbar without duplicating the two full-text copy actions", () => {
+    render(
+      <ResultToolbar
+        title="before ↔ after"
+        onEdit={vi.fn()}
+        onSwap={vi.fn()}
+        onCopyPatch={vi.fn()}
+        onSave={vi.fn()}
+        onExport={vi.fn()}
+        canUndo={false}
+        onUndo={vi.fn()}
+        busy={false}
+        aiBusy={false}
+        onAiAnalyze={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "复制补丁" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "复制原始文本" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "复制更改后文本" })).not.toBeInTheDocument();
   });
 });
 

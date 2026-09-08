@@ -807,7 +807,7 @@ input:focus-visible,
 .diff-viewer {
   display: grid;
   flex: 1;
-  grid-template-rows: 42px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   margin: 0 14px 14px;
   overflow: hidden;
@@ -817,14 +817,60 @@ input:focus-visible,
 }
 
 .diff-summary {
-  display: flex;
-  align-items: center;
-  gap: 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: 36px 22px;
   min-width: 0;
-  padding: 0 12px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-muted);
   font-size: 11px;
+}
+
+.diff-pane-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 0 8px 0 12px;
+}
+
+.diff-pane-summary-left {
+  border-right: 1px solid var(--border);
+}
+
+.diff-copy-button.icon-button {
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
+  border-color: var(--border);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  color: var(--text-muted);
+}
+
+.diff-copy-button.icon-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--accent-strong);
+}
+
+.diff-global-summary {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  background: color-mix(in srgb, var(--surface) 46%, var(--surface-muted));
+  color: var(--text-muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.diff-summary-separator {
+  color: var(--border-strong);
 }
 
 .stat {
@@ -832,6 +878,7 @@ input:focus-visible,
   align-items: center;
   gap: 5px;
   font-family: "IBM Plex Mono", monospace;
+  white-space: nowrap;
 }
 
 .stat strong {
@@ -876,15 +923,6 @@ input:focus-visible,
 
 .stat-add span {
   background: var(--add-bg);
-}
-
-.stat-neutral,
-.hunk-summary {
-  color: var(--text-muted);
-}
-
-.hunk-summary {
-  margin-left: auto;
 }
 
 .diff-scroll {
@@ -2207,8 +2245,7 @@ input:focus-visible,
 
 @media (max-width: 640px) {
   .privacy-badge,
-  .brand-name span,
-  .stat-neutral {
+  .brand-name span {
     display: none;
   }
 
@@ -2231,7 +2268,22 @@ input:focus-visible,
   }
 
   .diff-summary {
-    gap: 10px;
+    grid-template-rows: 34px 20px;
+  }
+
+  .diff-pane-summary {
+    padding: 0 5px 0 7px;
+  }
+
+  .diff-copy-button.icon-button {
+    width: 26px;
+    height: 26px;
+    flex-basis: 26px;
+  }
+
+  .diff-global-summary {
+    gap: 5px;
+    font-size: 9px;
   }
 
   .split-row {

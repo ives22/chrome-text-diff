@@ -1,7 +1,6 @@
 import {
   ArrowLeft,
   ArrowLeftRight,
-  Clipboard,
   Copy,
   Download,
   Save,
@@ -14,8 +13,6 @@ interface ResultToolbarProps {
   title: string;
   onEdit: () => void;
   onSwap: () => void;
-  onCopyLeft: () => void;
-  onCopyRight: () => void;
   onCopyPatch: () => void;
   onSave: () => void;
   onExport: () => void;
@@ -43,8 +40,6 @@ export function ResultToolbar(props: ResultToolbarProps) {
         <IconButton label="撤销最近一次合并" disabled={!props.canUndo || props.busy} onClick={props.onUndo}>
           <Undo2 size={16} />
         </IconButton>
-        <IconButton label="复制原始文本" onClick={props.onCopyLeft}><Copy size={16} /></IconButton>
-        <IconButton label="复制更改后文本" onClick={props.onCopyRight}><Clipboard size={16} /></IconButton>
         <button type="button" className="button button-quiet" disabled={props.busy} onClick={props.onCopyPatch}>
           <Copy size={16} aria-hidden="true" />复制补丁
         </button>

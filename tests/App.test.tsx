@@ -192,6 +192,49 @@ describe("App", () => {
     expect(screen.getByLabelText("更改后文本内容")).toHaveValue("beta");
   });
 
+  it("navigates an open merge panel with plain arrow keys without hijacking controls or modifiers", async () => {
+    const user = userEvent.setup();
+    const initialState = createDefaultAppState();
+    initialState.draft = {
+      ...initialState.draft,
+      leftText: "old-one\nstable\nold-two",
+      rightText: "new-one\nstable\nnew-two",
+    };
+    const diffClient = {
+      compare: vi.fn(async (leftText, rightText, options) =>
+        computeDiff(leftText, rightText, options)),
+      cancel: vi.fn(),
+      dispose: vi.fn(),
+    };
+
+    render(<App initialState={initialState} storage={new MemoryStorage()} diffClient={diffClient} />);
+    await user.click(screen.getByRole("button", { name: "查找差异" }));
+    await user.click(await screen.findByRole("button", { name: "选择第 1 处差异进行合并" }));
+    expect(screen.getByRole("group", { name: "当前差异操作" })).toHaveTextContent("更改 1 / 2");
+
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("group", { name: "当前差异操作" })).toHaveTextContent("更改 2 / 2");
+    await user.keyboard("{ArrowUp}");
+    expect(screen.getByRole("group", { name: "当前差异操作" })).toHaveTextContent("更改 1 / 2");
+
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(screen.getByRole("group", { name: "当前差异操作" })).toHaveTextContent("更改 2 / 2");
+    await user.keyboard("{Shift>}{ArrowUp}{/Shift}");
+    expect(screen.getByRole("group", { name: "当前差异操作" })).toHaveTextContent("更改 2 / 2");
+
+    await user.click(screen.getByRole("button", { name: "AI 模型设置" }));
+    await user.keyboard("{ArrowUp}");
+    expect(screen.getByRole("group", { name: "当前差异操作" })).toHaveTextContent("更改 2 / 2");
+    await user.click(screen.getByRole("button", { name: "关闭 AI 模型设置" }));
+
+    const input = document.createElement("input");
+    document.body.append(input);
+    input.focus();
+    await user.keyboard("{ArrowUp}");
+    expect(screen.getByRole("group", { name: "当前差异操作" })).toHaveTextContent("更改 2 / 2");
+    input.remove();
+  });
+
   it("supports the undo shortcut and clears merge undo after manual editing", async () => {
     const user = userEvent.setup();
     const initialState = createDefaultAppState();
