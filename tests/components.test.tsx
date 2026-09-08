@@ -463,6 +463,8 @@ describe("ResultToolbar", () => {
     expect(globalSummary).toHaveTextContent(/74 行未变\s*·\s*22 处差异/);
     expect(within(globalSummary).getByText("74 行未变")).toHaveClass("result-unchanged-count");
     expect(within(globalSummary).getByText("22 处差异")).toHaveClass("result-hunk-count");
+    expect(within(globalSummary).getByText("74 行未变")).toHaveAttribute("data-tone", "neutral");
+    expect(within(globalSummary).getByText("22 处差异")).toHaveAttribute("data-tone", "change");
   });
 });
 

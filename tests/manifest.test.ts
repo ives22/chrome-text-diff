@@ -24,7 +24,7 @@ describe("extension manifest", () => {
   });
 
   it("keeps the extension and package versions aligned", () => {
-    expect(manifest.version).toBe("0.3.5");
+    expect(manifest.version).toBe("0.3.6");
     expect(manifest.version).toBe(packageJson.version);
   });
 });

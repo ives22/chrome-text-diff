@@ -811,12 +811,8 @@ input:focus-visible,
 .result-global-summary {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   min-height: 24px;
-  padding: 2px 8px;
-  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--accent-soft) 48%, var(--surface));
   color: var(--text-muted);
   font-family: "IBM Plex Mono", monospace;
   font-size: 12px;
@@ -829,11 +825,19 @@ input:focus-visible,
 }
 
 .result-unchanged-count {
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 72%, var(--border));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-muted) 76%, var(--surface));
   color: var(--text-muted);
 }
 
 .result-hunk-count {
-  color: var(--accent-strong);
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--remove-text) 34%, var(--border));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--remove-bg) 58%, var(--surface));
+  color: var(--remove-text);
   font-weight: 600;
 }
 
@@ -855,7 +859,7 @@ input:focus-visible,
 
 .diff-summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr);
   grid-template-rows: 40px;
   min-width: 0;
   border-bottom: 1px solid var(--border);
@@ -872,20 +876,37 @@ input:focus-visible,
 }
 
 .diff-pane-summary-left {
-  border-right: 1px solid var(--border);
+  grid-column: 1;
+}
+
+.diff-pane-summary-right {
+  grid-column: 3;
+}
+
+.diff-summary::after {
+  grid-column: 2;
+  grid-row: 1;
+  content: "";
+  background: var(--page);
+  box-shadow: inset 1px 0 color-mix(in srgb, var(--border) 62%, transparent), inset -1px 0 color-mix(in srgb, var(--border) 62%, transparent);
 }
 
 .diff-pane-actions {
   display: flex;
+  flex: 0 0 124px;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: 10px;
   min-width: 0;
 }
 
 .diff-text-lines {
+  min-width: 38px;
   color: var(--text-faint);
   font-family: "IBM Plex Mono", monospace;
   font-size: 10px;
+  line-height: 28px;
+  text-align: right;
   white-space: nowrap;
 }
 
@@ -894,7 +915,7 @@ input:focus-visible,
   align-items: center;
   justify-content: center;
   gap: 5px;
-  min-width: 58px;
+  min-width: 64px;
   height: 28px;
   padding: 0 9px;
   border: 1px solid var(--border);
@@ -1226,9 +1247,10 @@ input:focus-visible,
 
 .split-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr);
   width: 100%;
   min-height: 30px;
+  background: var(--page);
 }
 
 .diff-cell {
@@ -1240,7 +1262,19 @@ input:focus-visible,
 }
 
 .diff-cell:first-child {
-  border-right: 1px solid var(--border);
+  grid-column: 1;
+}
+
+.diff-cell:last-child {
+  grid-column: 3;
+}
+
+.split-row::after {
+  grid-column: 2;
+  grid-row: 1;
+  content: "";
+  background: var(--page);
+  box-shadow: inset 1px 0 color-mix(in srgb, var(--border) 62%, transparent), inset -1px 0 color-mix(in srgb, var(--border) 62%, transparent);
 }
 
 .unified-row {
@@ -2255,8 +2289,12 @@ input:focus-visible,
 
   .result-global-summary {
     min-height: 22px;
-    padding: 2px 6px;
     font-size: 10px;
+  }
+
+  .result-unchanged-count,
+  .result-hunk-count {
+    padding: 2px 5px;
   }
 
   .diff-viewer {
@@ -2315,14 +2353,33 @@ input:focus-visible,
   }
 
   .diff-summary {
-    grid-template-rows: 38px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 38px 38px;
   }
 
   .diff-pane-summary {
     padding: 0 5px 0 7px;
   }
 
+  .diff-pane-summary-left,
+  .diff-pane-summary-right {
+    grid-column: 1;
+  }
+
+  .diff-pane-summary-left {
+    grid-row: 1;
+  }
+
+  .diff-pane-summary-right {
+    grid-row: 2;
+  }
+
+  .diff-summary::after {
+    display: none;
+  }
+
   .diff-pane-actions {
+    flex-basis: 108px;
     gap: 5px;
   }
 
@@ -2332,7 +2389,7 @@ input:focus-visible,
 
   .diff-copy-button {
     gap: 4px;
-    min-width: 50px;
+    min-width: 56px;
     height: 26px;
     padding: 0 6px;
     font-size: 10px;
@@ -2350,10 +2407,16 @@ input:focus-visible,
 
   .split-row {
     grid-template-columns: minmax(0, 1fr);
+    background: transparent;
   }
 
-  .split-row .diff-cell:first-child {
-    border-right: 0;
+  .split-row::after {
+    display: none;
+  }
+
+  .split-row .diff-cell:first-child,
+  .split-row .diff-cell:last-child {
+    grid-column: 1;
   }
 
   .hunk-panel-header {
